@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+build/
+dist/
+clientes.xlsx
+config.json
+web_app.db
