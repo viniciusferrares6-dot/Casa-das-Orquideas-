@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Loja{% endblock %}
+{% block content %}
+<section class="section-head">
+    <h1>Loja do cliente</h1>
+    <p>Escolha os produtos, adicione ao carrinho e finalize com PIX.</p>
+</section>
+<section class="product-grid">
+    {% for produto in produtos %}
+    <article class="product-card tall">
+        {% if produto.image_path %}
+        <img src="{{ url_for('asset_file', filename=produto.image_path) }}" alt="{{ produto.name }}">
+        {% else %}
+        <div class="image-placeholder">{{ produto.name[:1] }}</div>
+        {% endif %}
+        <h3>{{ produto.name }}</h3>
+        <p>{{ produto.category or "Sem categoria" }}</p>
+        <div class="meta-line">
+            <strong>R$ {{ "%.2f"|format(produto.price) }}</strong>
+            <span>{{ produto.stock }} em estoque</span>
+        </div>
+        <form method="post" action="{{ url_for('adicionar_carrinho', product_id=produto.id) }}" class="inline-form">
+            <input type="number" name="quantity" value="1" min="1" max="{{ produto.stock }}">
+            <button class="btn btn-primary" type="submit">Adicionar</button>
+        </form>
+    </article>
+    {% else %}
+    <p class="empty-state">Nenhum produto disponivel no momento.</p>
+    {% endfor %}
+</section>
+{% endblock %}

@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Orquideas Web{% endblock %}
+{% block content %}
+<section class="hero">
+    <div>
+        <p class="eyebrow">Versao web em andamento</p>
+        <h1>Seu sistema de orquideas agora com cara de site.</h1>
+        <p class="lead">Essa base ja traz login de admin, cadastro/login de clientes, catalogo, carrinho e checkout com SQLite.</p>
+        <div class="actions">
+            <a class="btn btn-primary" href="{{ url_for('cliente_login') }}">Entrar como cliente</a>
+            <a class="btn btn-secondary" href="{{ url_for('admin_login') }}">Abrir painel admin</a>
+        </div>
+    </div>
+    <div class="stats-card">
+        <div><strong>{{ contagens.clientes }}</strong><span>clientes</span></div>
+        <div><strong>{{ contagens.produtos }}</strong><span>produtos</span></div>
+        <div><strong>{{ contagens.vendas }}</strong><span>vendas</span></div>
+    </div>
+</section>
+
+<section class="grid-section">
+    <div class="section-head">
+        <h2>Destaques do catalogo</h2>
+        <p>Os dados iniciais podem ser importados automaticamente do seu Excel.</p>
+    </div>
+    <div class="product-grid">
+        {% for produto in destaques %}
+        <article class="product-card">
+            {% if produto.image_path %}
+            <img src="{{ url_for('asset_file', filename=produto.image_path) }}" alt="{{ produto.name }}">
+            {% else %}
+            <div class="image-placeholder">{{ produto.name[:1] }}</div>
+            {% endif %}
+            <h3>{{ produto.name }}</h3>
+            <p>{{ produto.category or "Sem categoria" }}</p>
+            <strong>R$ {{ "%.2f"|format(produto.price) }}</strong>
+        </article>
+        {% else %}
+        <p class="empty-state">Nenhum produto disponivel ainda.</p>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}

@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Carrinho{% endblock %}
+{% block content %}
+<section class="cart-layout">
+    <article class="panel grow">
+        <h1>Seu carrinho</h1>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Produto</th><th>Qtd</th><th>Unitario</th><th>Total</th><th></th></tr></thead>
+                <tbody>
+                    {% for item in cart %}
+                    <tr>
+                        <td>{{ item.name }}</td>
+                        <td>{{ item.quantity }}</td>
+                        <td>R$ {{ "%.2f"|format(item.unit_price) }}</td>
+                        <td>R$ {{ "%.2f"|format(item.unit_price * item.quantity) }}</td>
+                        <td>
+                            <form method="post" action="{{ url_for('remover_carrinho', product_id=item.product_id) }}">
+                                <button class="btn btn-ghost" type="submit">Remover</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="5">Seu carrinho esta vazio.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </article>
+
+    <aside class="panel summary">
+        <p class="eyebrow">Resumo</p>
+        <h2>Total</h2>
+        <div class="price-big">R$ {{ "%.2f"|format(total) }}</div>
+        <p>Pagamento PIX: <strong>{{ pix_key }}</strong></p>
+        <form method="post" action="{{ url_for('checkout') }}">
+            <button class="btn btn-primary full" type="submit">Finalizar compra</button>
+        </form>
+    </aside>
+</section>
+{% endblock %}
