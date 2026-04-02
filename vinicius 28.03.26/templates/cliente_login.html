@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Login Cliente{% endblock %}
+{% block content %}
+<section class="auth-wrap">
+    <form class="auth-card" method="post">
+        <p class="eyebrow">Area do cliente</p>
+        <h1>Entrar para comprar</h1>
+        <label>CPF
+            <input type="text" name="cpf" placeholder="Somente numeros" required>
+        </label>
+        <label>Senha
+            <input type="password" name="password" required>
+        </label>
+        <button class="btn btn-primary" type="submit">Entrar</button>
+    </form>
+</section>
+{% endblock %}
