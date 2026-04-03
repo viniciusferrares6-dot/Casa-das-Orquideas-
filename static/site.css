@@ -1,19 +1,19 @@
 @import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap");
 
 :root {
-    --bg: #f3ecdf;
-    --panel: rgba(255, 250, 243, 0.8);
-    --panel-strong: rgba(252, 246, 238, 0.96);
-    --ink: #162019;
-    --muted: #5e655c;
-    --line: rgba(31, 45, 33, 0.12);
-    --primary: #2f6f4f;
-    --primary-deep: #183a2f;
-    --accent: #d88e3d;
-    --accent-soft: #f3dfc6;
-    --cream: #fff8ef;
-    --shadow: 0 24px 60px rgba(22, 32, 25, 0.12);
-    --shadow-soft: 0 10px 30px rgba(22, 32, 25, 0.08);
+    --bg: #fbfbfc;
+    --panel: rgba(255, 255, 255, 0.92);
+    --panel-strong: rgba(255, 255, 255, 0.98);
+    --ink: #1f1718;
+    --muted: #6e5d61;
+    --line: rgba(165, 32, 52, 0.18);
+    --primary: #9f1832;
+    --primary-deep: #6f1025;
+    --accent: #cb3a54;
+    --accent-soft: #fae1e6;
+    --cream: #ffffff;
+    --shadow: 0 24px 60px rgba(80, 22, 31, 0.10);
+    --shadow-soft: 0 10px 30px rgba(80, 22, 31, 0.07);
     --radius-xl: 36px;
     --radius-lg: 28px;
     --radius-md: 20px;
@@ -33,9 +33,9 @@ body {
     color: var(--ink);
     font-family: "Manrope", sans-serif;
     background:
-        radial-gradient(circle at top left, rgba(216, 142, 61, 0.18), transparent 24rem),
-        radial-gradient(circle at 85% 15%, rgba(47, 111, 79, 0.16), transparent 20rem),
-        linear-gradient(180deg, #f8f1e7 0%, #eef4ec 100%);
+        radial-gradient(circle at top left, rgba(203, 58, 84, 0.10), transparent 24rem),
+        radial-gradient(circle at 88% 12%, rgba(159, 24, 50, 0.08), transparent 18rem),
+        linear-gradient(180deg, #ffffff 0%, #fcf7f8 100%);
     position: relative;
     overflow-x: hidden;
 }
@@ -45,8 +45,8 @@ body::before {
     position: fixed;
     inset: 0;
     background-image:
-        linear-gradient(rgba(255, 255, 255, 0.18) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255, 255, 255, 0.18) 1px, transparent 1px);
+        linear-gradient(rgba(203, 58, 84, 0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(203, 58, 84, 0.05) 1px, transparent 1px);
     background-size: 72px 72px;
     mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.3), transparent 80%);
     pointer-events: none;
@@ -89,13 +89,13 @@ main {
 .page-glow-left {
     top: -8rem;
     left: -7rem;
-    background: rgba(216, 142, 61, 0.24);
+    background: rgba(203, 58, 84, 0.16);
 }
 
 .page-glow-right {
     right: -8rem;
     bottom: 4rem;
-    background: rgba(47, 111, 79, 0.18);
+    background: rgba(159, 24, 50, 0.12);
 }
 
 .page-shell {
@@ -113,9 +113,9 @@ main {
     gap: 20px;
     padding: 18px 22px;
     margin-bottom: 30px;
-    background: rgba(255, 249, 241, 0.7);
+    background: rgba(255, 255, 255, 0.88);
     backdrop-filter: blur(18px);
-    border: 1px solid rgba(255, 255, 255, 0.5);
+    border: 1px solid var(--line);
     border-radius: 30px;
     box-shadow: var(--shadow-soft);
 }
@@ -136,7 +136,7 @@ main {
     color: white;
     font-weight: 800;
     letter-spacing: 0.08em;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 10px 24px rgba(159, 24, 50, 0.18);
 }
 
 .brand > span:last-child {
@@ -175,8 +175,8 @@ main {
 }
 
 .nav a:hover {
-    background: rgba(47, 111, 79, 0.1);
-    color: var(--primary-deep);
+    background: rgba(203, 58, 84, 0.08);
+    color: var(--primary);
     transform: translateY(-1px);
 }
 
@@ -187,7 +187,7 @@ main {
 .hero-note,
 .trust-band > div {
     background: var(--panel);
-    border: 1px solid rgba(255, 255, 255, 0.55);
+    border: 1px solid var(--line);
     box-shadow: var(--shadow);
 }
 
@@ -209,7 +209,7 @@ main {
     width: 18rem;
     height: 18rem;
     border-radius: 50%;
-    background: radial-gradient(circle, rgba(216, 142, 61, 0.18), transparent 70%);
+    background: radial-gradient(circle, rgba(203, 58, 84, 0.12), transparent 70%);
 }
 
 .hero-copy,
@@ -276,8 +276,8 @@ main {
 
 .hero-points span,
 .stock-badge {
-    background: rgba(255, 255, 255, 0.56);
-    border: 1px solid rgba(47, 111, 79, 0.12);
+    background: rgba(255, 251, 252, 0.95);
+    border: 1px solid var(--line);
     color: var(--primary-deep);
     padding: 10px 14px;
     border-radius: 999px;
@@ -296,7 +296,7 @@ main {
     padding: 24px;
     min-height: 170px;
     background:
-        linear-gradient(160deg, rgba(255, 251, 244, 0.95), rgba(243, 248, 241, 0.92)),
+        linear-gradient(160deg, rgba(255, 255, 255, 0.98), rgba(252, 245, 247, 0.94)),
         var(--panel);
 }
 
@@ -320,17 +320,19 @@ main {
 .btn-primary {
     background: linear-gradient(135deg, var(--primary), var(--primary-deep));
     color: white;
-    box-shadow: 0 14px 28px rgba(24, 58, 47, 0.2);
+    box-shadow: 0 14px 28px rgba(111, 16, 37, 0.22);
 }
 
 .btn-secondary {
-    background: linear-gradient(135deg, #efc08b, var(--accent));
-    color: #38210a;
+    background: linear-gradient(135deg, #ffd9df, #f4b6c1);
+    color: var(--primary-deep);
+    border: 1px solid rgba(159, 24, 50, 0.18);
 }
 
 .btn-ghost {
-    background: #ede5da;
+    background: #fff7f8;
     color: var(--ink);
+    border: 1px solid var(--line);
 }
 
 .full {
@@ -344,7 +346,7 @@ main {
     border-radius: 28px;
     padding: 24px;
     background:
-        linear-gradient(180deg, rgba(255, 252, 246, 0.9), rgba(246, 250, 245, 0.9));
+        linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(252, 245, 247, 0.92));
 }
 
 .stats-card div {
@@ -381,6 +383,18 @@ main {
     border-radius: 26px;
     padding: 22px;
     background: var(--panel-strong);
+    position: relative;
+}
+
+.trust-band > div::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 22px;
+    right: 22px;
+    height: 3px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, var(--primary), var(--accent));
 }
 
 .flash-stack {
@@ -397,15 +411,15 @@ main {
 }
 
 .flash-success {
-    background: rgba(228, 243, 229, 0.86);
+    background: rgba(252, 241, 244, 0.95);
 }
 
 .flash-error {
-    background: rgba(247, 222, 222, 0.9);
+    background: rgba(255, 232, 236, 0.95);
 }
 
 .flash-warning {
-    background: rgba(248, 237, 211, 0.9);
+    background: rgba(255, 243, 230, 0.95);
 }
 
 .grid-section,
@@ -421,8 +435,8 @@ main {
 }
 
 .product-card {
-    background: rgba(255, 251, 244, 0.94);
-    border: 1px solid rgba(255, 255, 255, 0.5);
+    background: rgba(255, 255, 255, 0.98);
+    border: 1px solid var(--line);
     border-radius: 28px;
     padding: 16px;
     box-shadow: var(--shadow-soft);
@@ -432,6 +446,7 @@ main {
 .product-card:hover {
     transform: translateY(-4px);
     box-shadow: var(--shadow);
+    border-color: rgba(159, 24, 50, 0.28);
 }
 
 .product-card.tall {
@@ -469,7 +484,7 @@ main {
     border-radius: 22px;
     display: grid;
     place-items: center;
-    background: linear-gradient(135deg, #f2d3a7, #cfe2c9);
+    background: linear-gradient(135deg, #ffe8ec, #f7c3cd);
     color: var(--primary-deep);
     font-size: 4rem;
     font-family: "Cormorant Garamond", serif;
@@ -485,7 +500,7 @@ main {
     width: min(560px, 100%);
     border-radius: 32px;
     padding: 34px;
-    background: rgba(255, 249, 241, 0.82);
+    background: rgba(255, 255, 255, 0.94);
 }
 
 .auth-card.wide {
@@ -512,7 +527,7 @@ select {
     width: 100%;
     padding: 13px 14px;
     background: var(--cream);
-    border: 1px solid rgba(31, 45, 33, 0.1);
+    border: 1px solid rgba(165, 32, 52, 0.16);
     border-radius: 16px;
     transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 }
@@ -520,8 +535,8 @@ select {
 input:focus,
 select:focus {
     outline: none;
-    border-color: rgba(47, 111, 79, 0.38);
-    box-shadow: 0 0 0 4px rgba(47, 111, 79, 0.1);
+    border-color: rgba(159, 24, 50, 0.42);
+    box-shadow: 0 0 0 4px rgba(203, 58, 84, 0.12);
     transform: translateY(-1px);
 }
 
@@ -538,12 +553,12 @@ select:focus {
 .panel {
     border-radius: 30px;
     padding: 24px;
-    background: rgba(255, 250, 243, 0.84);
+    background: rgba(255, 255, 255, 0.96);
 }
 
 .panel-accent {
     background:
-        linear-gradient(180deg, rgba(255, 245, 230, 0.92), rgba(255, 250, 243, 0.88));
+        linear-gradient(180deg, rgba(255, 248, 249, 0.96), rgba(255, 255, 255, 0.94));
 }
 
 .table-wrap {
@@ -611,8 +626,8 @@ th {
 .pix-box {
     padding: 14px 16px;
     border-radius: 18px;
-    background: rgba(243, 223, 198, 0.5);
-    border: 1px solid rgba(216, 142, 61, 0.22);
+    background: rgba(255, 243, 246, 0.92);
+    border: 1px solid var(--line);
 }
 
 .empty-state {
