@@ -3,6 +3,7 @@
 {% block content %}
 <section class="cart-layout">
     <article class="panel grow">
+        <p class="eyebrow">Carrinho</p>
         <h1>Seu carrinho</h1>
         <div class="table-wrap">
             <table>
@@ -32,7 +33,7 @@
         <p class="eyebrow">Resumo</p>
         <h2>Total</h2>
         <div class="price-big">R$ {{ "%.2f"|format(total) }}</div>
-        <p>Pagamento PIX: <strong>{{ pix_key }}</strong></p>
+        <p class="pix-box">Pagamento PIX: <strong>{{ pix_key }}</strong></p>
         <form method="post" action="{{ url_for('checkout') }}">
             <button class="btn btn-primary full" type="submit">Finalizar compra</button>
         </form>

@@ -2,26 +2,54 @@
 {% block title %}Orquideas Web{% endblock %}
 {% block content %}
 <section class="hero">
-    <div>
-        <p class="eyebrow">Versao web em andamento</p>
-        <h1>Seu sistema de orquideas agora com cara de site.</h1>
-        <p class="lead">Essa base ja traz login de admin, cadastro/login de clientes, catalogo, carrinho e checkout com SQLite.</p>
+    <div class="hero-copy">
+        <p class="eyebrow">Loja pronta para vender no Render</p>
+        <h1>Um catalogo de orquideas com clima premium, leve e confiavel.</h1>
+        <p class="lead">Sua operacao agora aparece com presenca de marca: entrada bonita, catalogo organizado, carrinho claro e painel com leitura mais profissional.</p>
+        <div class="hero-points">
+            <span>Checkout simples</span>
+            <span>Catalogo visual</span>
+            <span>Painel organizado</span>
+        </div>
         <div class="actions">
             <a class="btn btn-primary" href="{{ url_for('cliente_login') }}">Entrar como cliente</a>
             <a class="btn btn-secondary" href="{{ url_for('admin_login') }}">Abrir painel admin</a>
         </div>
     </div>
-    <div class="stats-card">
-        <div><strong>{{ contagens.clientes }}</strong><span>clientes</span></div>
-        <div><strong>{{ contagens.produtos }}</strong><span>produtos</span></div>
-        <div><strong>{{ contagens.vendas }}</strong><span>vendas</span></div>
+    <div class="hero-visual">
+        <article class="hero-note">
+            <p class="mini-label">Curadoria</p>
+            <h2>Experiencia mais bonita em qualquer tela</h2>
+            <p>Desktop e celular com o mesmo visual limpo, sem cara de sistema improvisado.</p>
+        </article>
+        <div class="stats-card">
+            <div><strong>{{ contagens.clientes }}</strong><span>clientes ativos</span></div>
+            <div><strong>{{ contagens.produtos }}</strong><span>produtos no catalogo</span></div>
+            <div><strong>{{ contagens.vendas }}</strong><span>vendas registradas</span></div>
+        </div>
+    </div>
+</section>
+
+<section class="trust-band">
+    <div>
+        <span class="trust-kicker">Visual mais forte</span>
+        <p>Melhor contraste, mais hierarquia e componentes consistentes da home ate o checkout.</p>
+    </div>
+    <div>
+        <span class="trust-kicker">Fluxo mais claro</span>
+        <p>Cliente entende rapido onde entrar, comprar e finalizar pedido sem se perder.</p>
+    </div>
+    <div>
+        <span class="trust-kicker">Mais presenca</span>
+        <p>O site passa mais cuidado com a marca e melhora a impressao para quem acessa pelo link do Render.</p>
     </div>
 </section>
 
 <section class="grid-section">
     <div class="section-head">
-        <h2>Destaques do catalogo</h2>
-        <p>Os dados iniciais podem ser importados automaticamente do seu Excel.</p>
+        <p class="eyebrow">Catalogo</p>
+        <h2>Destaques em exibicao</h2>
+        <p>Os dados iniciais podem ser importados do seu Excel e agora aparecem com uma vitrine mais elegante.</p>
     </div>
     <div class="product-grid">
         {% for produto in destaques %}
@@ -33,7 +61,10 @@
             {% endif %}
             <h3>{{ produto.name }}</h3>
             <p>{{ produto.category or "Sem categoria" }}</p>
-            <strong>R$ {{ "%.2f"|format(produto.price) }}</strong>
+            <div class="price-line">
+                <strong>R$ {{ "%.2f"|format(produto.price) }}</strong>
+                <span>Disponivel para pedido</span>
+            </div>
         </article>
         {% else %}
         <p class="empty-state">Nenhum produto disponivel ainda.</p>
