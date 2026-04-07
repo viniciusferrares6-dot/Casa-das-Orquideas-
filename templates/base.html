@@ -11,26 +11,28 @@
     <div class="page-glow page-glow-right"></div>
     <div class="page-shell">
         <header class="topbar">
-            <a class="brand" href="{{ url_for('index') }}">
-                <span class="brand-seal">OW</span>
-                <span>
-                    <span class="brand-mark">Orquideas</span>
-                    <span class="brand-sub">atelier digital</span>
-                </span>
-            </a>
-            <nav class="nav">
-                <a href="{{ url_for('index') }}">Inicio</a>
-                <a href="{{ url_for('admin_login') }}">Admin</a>
-                <a href="{{ url_for('cliente_login') }}">Cliente</a>
-                <a href="{{ url_for('cliente_cadastro') }}">Cadastro</a>
-                {% if cliente_logado %}
-                <a href="{{ url_for('loja_cliente') }}">Loja</a>
-                <a href="{{ url_for('ver_carrinho') }}">Carrinho</a>
-                {% endif %}
-                {% if admin_logado or cliente_logado %}
-                <a href="{{ url_for('logout') }}">Sair</a>
-                {% endif %}
-            </nav>
+            <div class="topbar-main">
+                <a class="brand brand-logo" href="{{ url_for('index') }}" aria-label="Casa das Orquideas">
+                    <img src="{{ url_for('asset_file', filename='logo_transparente.png') }}" alt="Logo Casa das Orquideas">
+                </a>
+                <a class="brand-title" href="{{ url_for('index') }}">
+                    <span class="brand-mark">Casa das Orquideas</span>
+                    <span class="brand-sub">Floricultura</span>
+                </a>
+                <nav class="nav">
+                    <a href="{{ url_for('index') }}">Inicio</a>
+                    <a href="{{ url_for('admin_login') }}">Admin</a>
+                    <a href="{{ url_for('cliente_login') }}">Cliente</a>
+                    <a href="{{ url_for('cliente_cadastro') }}">Cadastro</a>
+                    {% if cliente_logado %}
+                    <a href="{{ url_for('loja_cliente') }}">Loja</a>
+                    <a href="{{ url_for('ver_carrinho') }}">Carrinho</a>
+                    {% endif %}
+                    {% if admin_logado or cliente_logado %}
+                    <a href="{{ url_for('logout') }}">Sair</a>
+                    {% endif %}
+                </nav>
+            </div>
         </header>
 
         {% with messages = get_flashed_messages(with_categories=true) %}

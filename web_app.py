@@ -82,6 +82,19 @@ def encontrar_imagem_produto(nome_produto):
     return None
 
 
+def garantir_imagens_produtos(db):
+    produtos_sem_imagem = db.execute("SELECT id, name FROM products WHERE image_path IS NULL OR image_path = ''").fetchall()
+    houve_atualizacao = False
+    for produto in produtos_sem_imagem:
+        imagem = encontrar_imagem_produto(produto["name"])
+        if not imagem:
+            continue
+        db.execute("UPDATE products SET image_path = ? WHERE id = ?", (imagem, produto["id"]))
+        houve_atualizacao = True
+    if houve_atualizacao:
+        db.commit()
+
+
 def init_db():
     preparar_armazenamento()
     db = get_db()
@@ -129,6 +142,7 @@ def init_db():
     )
     db.commit()
     importar_do_excel_se_necessario(db)
+    garantir_imagens_produtos(db)
 
 
 def importar_do_excel_se_necessario(db):
