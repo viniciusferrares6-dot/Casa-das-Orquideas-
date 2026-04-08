@@ -265,7 +265,23 @@ def index():
     destaques = db.execute(
         "SELECT id, name, category, price, stock, status, image_path FROM products ORDER BY id DESC LIMIT 6"
     ).fetchall()
-    return render_template("index.html", contagens=contagens, destaques=destaques)
+    catalogo_publico = {
+        "nome": "Cattleya hibrida",
+        "preco": "80,00",
+        "imagem": "Cattleya Roxa.jpg",
+        "descricao": (
+            "Orquidea de flores grandes, perfumadas e vibrantes, ideal para quem quer destacar "
+            "a beleza natural do ambiente com um toque elegante."
+        ),
+        "ambiente": "Vai muito bem em locais bem iluminados, com luz indireta e boa ventilacao.",
+        "cuidados": "Rega moderada e substrato leve, sempre deixando secar entre uma irrigacao e outra.",
+    }
+    return render_template(
+        "index.html",
+        contagens=contagens,
+        destaques=destaques,
+        catalogo_publico=catalogo_publico,
+    )
 
 
 @app.route("/assets/<path:filename>")

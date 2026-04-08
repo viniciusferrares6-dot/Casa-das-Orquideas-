@@ -216,6 +216,7 @@ main {
 .panel,
 .auth-card,
 .stats-card,
+.catalog-spotlight,
 .hero-note,
 .trust-band > div {
     background: var(--panel);
@@ -422,6 +423,48 @@ main {
     margin-bottom: 30px;
 }
 
+.catalog-spotlight {
+    display: grid;
+    grid-template-columns: minmax(300px, 0.9fr) minmax(0, 1.1fr);
+    gap: 24px;
+    padding: 26px;
+    margin-bottom: 30px;
+    border-radius: var(--radius-xl);
+    background:
+        linear-gradient(135deg, rgba(34, 35, 42, 0.98), rgba(24, 25, 31, 0.94));
+}
+
+.catalog-spotlight-media img {
+    height: 100%;
+    min-height: 420px;
+}
+
+.catalog-spotlight-copy {
+    display: grid;
+    align-content: center;
+    gap: 12px;
+}
+
+.catalog-spotlight-copy p {
+    margin: 0;
+    color: var(--muted);
+    line-height: 1.7;
+}
+
+.catalog-tags {
+    display: grid;
+    gap: 12px;
+    margin: 8px 0 10px;
+}
+
+.catalog-tags span {
+    padding: 14px 16px;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(165, 32, 52, 0.22);
+    color: #f5eef0;
+}
+
 .trust-band > div {
     border-radius: 26px;
     padding: 22px;
@@ -540,6 +583,10 @@ main {
 .product-card p {
     color: var(--muted);
     margin-top: 0;
+}
+
+.card-actions {
+    margin-top: 14px;
 }
 
 .price-line {
@@ -713,6 +760,7 @@ th {
 
 @media (max-width: 980px) {
     .hero,
+    .catalog-spotlight,
     .trust-band,
     .story-band,
     .cart-layout {
