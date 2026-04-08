@@ -275,7 +275,12 @@ def client_required(view):
 
 
 def carrinho_atual():
-    cart = session.setdefault("cart", [])
+    cart = session.get("cart", [])
+    if not isinstance(cart, list):
+        session["cart"] = []
+        session.modified = True
+        return session["cart"]
+
     cart_normalizado = []
     houve_ajuste = False
 
