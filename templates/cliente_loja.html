@@ -5,6 +5,10 @@
     <p class="eyebrow">Loja</p>
     <h1>Loja do cliente</h1>
     <p>Escolha os produtos, adicione ao carrinho e finalize com PIX.</p>
+    <div class="section-actions">
+        <a class="btn btn-secondary" href="{{ url_for('index') }}">Continuar vendo o catalogo</a>
+        <a class="btn btn-primary" href="{{ url_for('ver_carrinho') }}">Ver carrinho{% if itens_carrinho %} ({{ itens_carrinho }}){% endif %}</a>
+    </div>
 </section>
 <section class="product-grid">
     {% for produto in produtos %}
@@ -24,6 +28,9 @@
             <input type="number" name="quantity" value="1" min="1" max="{{ produto.stock }}">
             <button class="btn btn-primary" type="submit">Adicionar</button>
         </form>
+        <div class="card-actions">
+            <a class="btn btn-secondary full" href="{{ url_for('ver_carrinho') }}">Ir para o carrinho</a>
+        </div>
     </article>
     {% else %}
     <p class="empty-state">Nenhum produto disponivel no momento.</p>

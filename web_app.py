@@ -237,7 +237,7 @@ def client_required(view):
     def wrapped_view(**kwargs):
         if not session.get("client_id"):
             flash("Entre como cliente para continuar.", "warning")
-            return redirect(url_for("cliente_login"))
+            return redirect(url_for("cliente_login", next=request.full_path.rstrip("?")))
         return view(**kwargs)
 
     return wrapped_view
@@ -245,6 +245,15 @@ def client_required(view):
 
 def carrinho_atual():
     return session.setdefault("cart", [])
+
+
+def obter_destino_pos_login():
+    destino = request.values.get("next", "").strip()
+    if not destino or not destino.startswith("/"):
+        return url_for("loja_cliente")
+    if destino.startswith("//"):
+        return url_for("loja_cliente")
+    return destino
 
 
 @app.route("/health")
@@ -268,7 +277,7 @@ def index():
     catalogo_publico = {
         "nome": "Cattleya hibrida",
         "preco": "80,00",
-        "imagem": "Cattleya Roxa.jpg",
+        "imagem": "cattleya.site.jpeg",
         "descricao": (
             "Orquidea de flores grandes, perfumadas e vibrantes, ideal para quem quer destacar "
             "a beleza natural do ambiente com um toque elegante."
@@ -307,6 +316,7 @@ def admin_login():
 
 @app.route("/cliente/login", methods=["GET", "POST"])
 def cliente_login():
+    proximo_destino = obter_destino_pos_login()
     if request.method == "POST":
         cpf = normalizar_cpf(request.form.get("cpf"))
         senha = request.form.get("password", "")
@@ -317,13 +327,14 @@ def cliente_login():
             session["client_name"] = cliente["name"]
             session["cart"] = []
             flash("Login realizado com sucesso.", "success")
-            return redirect(url_for("loja_cliente"))
+            return redirect(proximo_destino)
         flash("CPF ou senha invalidos.", "error")
-    return render_template("cliente_login.html")
+    return render_template("cliente_login.html", proximo_destino=proximo_destino)
 
 
 @app.route("/cliente/cadastro", methods=["GET", "POST"])
 def cliente_cadastro():
+    proximo_destino = obter_destino_pos_login()
     if request.method == "POST":
         nome = request.form.get("name", "").strip()
         cpf = normalizar_cpf(request.form.get("cpf"))
@@ -334,10 +345,10 @@ def cliente_cadastro():
         confirmar = request.form.get("password_confirm", "")
         if not nome or len(cpf) != 11 or not senha:
             flash("Preencha nome, CPF valido e senha.", "error")
-            return render_template("cliente_cadastro.html")
+            return render_template("cliente_cadastro.html", proximo_destino=proximo_destino)
         if senha != confirmar:
             flash("As senhas nao conferem.", "error")
-            return render_template("cliente_cadastro.html")
+            return render_template("cliente_cadastro.html", proximo_destino=proximo_destino)
         db = get_db()
         try:
             db.execute(
@@ -359,10 +370,10 @@ def cliente_cadastro():
             db.commit()
         except sqlite3.IntegrityError:
             flash("Ja existe um cliente com esse CPF.", "error")
-            return render_template("cliente_cadastro.html")
+            return render_template("cliente_cadastro.html", proximo_destino=proximo_destino)
         flash("Cadastro concluido. Agora voce ja pode entrar.", "success")
-        return redirect(url_for("cliente_login"))
-    return render_template("cliente_cadastro.html")
+        return redirect(url_for("cliente_login", next=proximo_destino))
+    return render_template("cliente_cadastro.html", proximo_destino=proximo_destino)
 
 
 @app.route("/logout")
@@ -463,7 +474,8 @@ def loja_cliente():
     produtos = get_db().execute(
         "SELECT * FROM products WHERE status != 'Inativo' ORDER BY name"
     ).fetchall()
-    return render_template("cliente_loja.html", produtos=produtos)
+    itens_carrinho = sum(item["quantity"] for item in carrinho_atual())
+    return render_template("cliente_loja.html", produtos=produtos, itens_carrinho=itens_carrinho)
 
 
 @app.post("/carrinho/adicionar/<int:product_id>")
@@ -513,7 +525,13 @@ def adicionar_carrinho(product_id):
 def ver_carrinho():
     cart = carrinho_atual()
     total = sum(item["unit_price"] * item["quantity"] for item in cart)
-    return render_template("carrinho.html", cart=cart, total=total, pix_key=CONFIG["pix_key"])
+    return render_template(
+        "carrinho.html",
+        cart=cart,
+        total=total,
+        pix_key=CONFIG["pix_key"],
+        itens_carrinho=sum(item["quantity"] for item in cart),
+    )
 
 
 @app.post("/carrinho/remover/<int:product_id>")

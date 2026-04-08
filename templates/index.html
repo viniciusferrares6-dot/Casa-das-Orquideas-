@@ -12,15 +12,15 @@
             <span>Atendimento com cuidado</span>
         </div>
         <div class="actions">
-            <a class="btn btn-primary" href="{{ url_for('cliente_login') }}">Entrar como cliente</a>
-            <a class="btn btn-secondary" href="{{ url_for('cliente_cadastro') }}">Criar cadastro</a>
+            <a class="btn btn-primary" href="{{ url_for('cliente_login', next=url_for('loja_cliente')) }}">Entrar como cliente</a>
+            <a class="btn btn-secondary" href="{{ url_for('cliente_cadastro', next=url_for('loja_cliente')) }}">Criar cadastro</a>
         </div>
     </div>
     <div class="hero-visual">
         <article class="hero-note">
             <p class="mini-label">Nossa essencia</p>
             <h2>Elegancia natural em cada detalhe</h2>
-            <p>Uma floricultura feita para quem valoriza delicadeza, presenca e a beleza unica das orquideas.</p>
+            <p>Um orquidario feito para quem valoriza delicadeza, presenca e a beleza unica das orquideas.</p>
         </article>
         <div class="stats-card">
             <div><strong>{{ contagens.clientes }}</strong><span>clientes cadastrados</span></div>
@@ -48,8 +48,8 @@
             <a class="btn btn-primary" href="{{ url_for('loja_cliente') }}">Ir para a lista de compras</a>
             <a class="btn btn-secondary" href="{{ url_for('ver_carrinho') }}">Abrir carrinho</a>
             {% else %}
-            <a class="btn btn-primary" href="{{ url_for('cliente_login') }}">Entrar para comprar</a>
-            <a class="btn btn-secondary" href="{{ url_for('cliente_cadastro') }}">Criar cadastro</a>
+            <a class="btn btn-primary" href="{{ url_for('cliente_login', next=url_for('loja_cliente')) }}">Entrar para comprar</a>
+            <a class="btn btn-secondary" href="{{ url_for('cliente_cadastro', next=url_for('loja_cliente')) }}">Criar cadastro</a>
             {% endif %}
         </div>
     </div>
@@ -94,7 +94,7 @@
                 {% if cliente_logado %}
                 <a class="btn btn-primary full" href="{{ url_for('loja_cliente') }}">Comprar na loja</a>
                 {% else %}
-                <a class="btn btn-primary full" href="{{ url_for('cliente_login') }}">Ver na lista de compras</a>
+                <a class="btn btn-primary full" href="{{ url_for('cliente_login', next=url_for('loja_cliente')) }}">Ver na lista de compras</a>
                 {% endif %}
             </div>
         </article>
@@ -107,7 +107,7 @@
 <section class="story-band">
     <div class="story-copy">
         <p class="eyebrow">Encanto natural</p>
-        <h2>Casa das Orquideas une delicadeza, elegancia e um atendimento feito com carinho.</h2>
+        <h2>Casa das Orquideas une delicadeza, elegancia e a experiencia de um orquidario feito com carinho.</h2>
         <p>Nosso objetivo e tornar cada escolha mais especial, seja para presentear, decorar ou transformar um momento simples em algo memoravel.</p>
     </div>
     <div class="story-card">

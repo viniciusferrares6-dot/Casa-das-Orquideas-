@@ -5,7 +5,8 @@
     <form class="auth-card wide" method="post">
         <p class="eyebrow">Novo cliente</p>
         <h1>Criar conta no site</h1>
-        <p class="section-copy">Cadastre seus dados para comprar com mais rapidez nas proximas visitas.</p>
+        <p class="section-copy">Cadastre seus dados para seguir direto para a compra e finalizar tudo com mais rapidez nas proximas visitas.</p>
+        <input type="hidden" name="next" value="{{ proximo_destino }}">
         <div class="form-grid">
             <label>Nome<input type="text" name="name" required></label>
             <label>CPF<input type="text" name="cpf" required></label>
@@ -16,7 +17,10 @@
             <label>Senha<input type="password" name="password" required></label>
             <label>Confirmar senha<input type="password" name="password_confirm" required></label>
         </div>
-        <button class="btn btn-primary" type="submit">Criar conta</button>
+        <div class="auth-actions">
+            <button class="btn btn-primary full" type="submit">Criar conta</button>
+            <a class="btn btn-secondary full" href="{{ url_for('cliente_login', next=proximo_destino) }}">Ja tenho cadastro</a>
+        </div>
     </form>
 </section>
 {% endblock %}

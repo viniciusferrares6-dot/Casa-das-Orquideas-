@@ -5,6 +5,9 @@
     <article class="panel grow">
         <p class="eyebrow">Carrinho</p>
         <h1>Seu carrinho</h1>
+        <div class="section-actions">
+            <a class="btn btn-secondary" href="{{ url_for('loja_cliente') }}">Continuar comprando</a>
+        </div>
         <div class="table-wrap">
             <table>
                 <thead><tr><th>Produto</th><th>Qtd</th><th>Unitario</th><th>Total</th><th></th></tr></thead>
@@ -33,6 +36,7 @@
         <p class="eyebrow">Resumo</p>
         <h2>Total</h2>
         <div class="price-big">R$ {{ "%.2f"|format(total) }}</div>
+        <p class="section-copy">Itens no carrinho: {{ itens_carrinho }}</p>
         <p class="pix-box">Pagamento PIX: <strong>{{ pix_key }}</strong></p>
         <form method="post" action="{{ url_for('checkout') }}">
             <button class="btn btn-primary full" type="submit">Finalizar compra</button>

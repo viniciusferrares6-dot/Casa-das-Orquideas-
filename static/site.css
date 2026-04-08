@@ -308,7 +308,8 @@ main {
 .actions,
 .inline-form,
 .dashboard-grid,
-.meta-line {
+.meta-line,
+.section-actions {
     display: flex;
     gap: 12px;
 }
@@ -638,6 +639,33 @@ main {
     font-weight: 600;
 }
 
+.auth-actions {
+    display: grid;
+    gap: 12px;
+    margin-top: 8px;
+}
+
+.auth-helper {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 0.95rem;
+}
+
+.auth-helper a {
+    color: var(--accent-soft);
+    font-weight: 700;
+}
+
+.section-actions {
+    flex-wrap: wrap;
+    margin-top: 18px;
+}
+
 .form-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -792,7 +820,9 @@ th {
     }
 
     .actions,
-    .inline-form {
+    .inline-form,
+    .section-actions,
+    .auth-helper {
         flex-wrap: wrap;
     }
 }
