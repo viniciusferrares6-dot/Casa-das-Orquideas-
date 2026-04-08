@@ -82,6 +82,10 @@ button {
     font: inherit;
 }
 
+form {
+    margin: 0;
+}
+
 main {
     position: relative;
     z-index: 1;
@@ -515,6 +519,32 @@ main {
     margin-bottom: 30px;
 }
 
+.checkout-steps {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 18px;
+}
+
+.step-chip {
+    padding: 10px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--muted);
+    font-weight: 700;
+}
+
+.step-chip.active {
+    background: rgba(198, 82, 105, 0.16);
+    color: #fff;
+}
+
+.step-chip.done {
+    background: rgba(255, 255, 255, 0.06);
+    color: #fff;
+}
+
 .story-band {
     display: grid;
     grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
@@ -588,6 +618,10 @@ main {
 
 .card-actions {
     margin-top: 14px;
+}
+
+.cta-form {
+    display: inline-flex;
 }
 
 .price-line {
@@ -773,6 +807,33 @@ th {
     font-weight: 800;
     margin: 10px 0 18px;
     font-family: "Cormorant Garamond", serif;
+}
+
+.confirmation-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 14px;
+    margin: 20px 0;
+}
+
+.confirmation-card {
+    display: grid;
+    gap: 8px;
+    padding: 18px;
+    border-radius: 20px;
+    border: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.confirmation-card span {
+    color: var(--muted);
+    font-size: 0.88rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+}
+
+.confirmation-card strong {
+    font-size: 1.2rem;
 }
 
 .pix-box {

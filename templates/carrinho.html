@@ -1,6 +1,11 @@
 {% extends "base.html" %}
 {% block title %}Carrinho{% endblock %}
 {% block content %}
+<section class="checkout-steps">
+    <span class="step-chip active">1. Carrinho</span>
+    <span class="step-chip active">2. Pagamento</span>
+    <span class="step-chip">3. Confirmacao</span>
+</section>
 <section class="cart-layout">
     <article class="panel grow">
         <p class="eyebrow">Carrinho</p>
@@ -38,6 +43,7 @@
         <div class="price-big">R$ {{ "%.2f"|format(total) }}</div>
         <p class="section-copy">Itens no carrinho: {{ itens_carrinho }}</p>
         <p class="pix-box">Pagamento PIX: <strong>{{ pix_key }}</strong></p>
+        <p class="section-copy">Ao finalizar, voce recebe um resumo do pedido e os dados para pagamento.</p>
         <form method="post" action="{{ url_for('checkout') }}">
             <button class="btn btn-primary full" type="submit">Finalizar compra</button>
         </form>

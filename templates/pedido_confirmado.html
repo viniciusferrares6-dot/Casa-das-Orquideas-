@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Pedido Confirmado{% endblock %}
+{% block content %}
+<section class="checkout-steps">
+    <span class="step-chip done">1. Carrinho</span>
+    <span class="step-chip done">2. Pagamento</span>
+    <span class="step-chip active">3. Confirmacao</span>
+</section>
+
+<section class="cart-layout">
+    <article class="panel grow">
+        <p class="eyebrow">Pedido confirmado</p>
+        <h1>Seu pedido foi registrado</h1>
+        <p class="section-copy">Agora e so realizar o pagamento via PIX para concluir a compra do seu pedido.</p>
+        <div class="confirmation-grid">
+            <div class="confirmation-card">
+                <span>Numero do pedido</span>
+                <strong>#{{ pedido.id }}</strong>
+            </div>
+            <div class="confirmation-card">
+                <span>Status</span>
+                <strong>{{ pedido.status }}</strong>
+            </div>
+            <div class="confirmation-card">
+                <span>Data</span>
+                <strong>{{ pedido.created_at }}</strong>
+            </div>
+        </div>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Produto</th><th>Qtd</th><th>Unitario</th><th>Total</th></tr></thead>
+                <tbody>
+                    {% for item in itens %}
+                    <tr>
+                        <td>{{ item.product_name }}</td>
+                        <td>{{ item.quantity }}</td>
+                        <td>R$ {{ "%.2f"|format(item.unit_price) }}</td>
+                        <td>R$ {{ "%.2f"|format(item.total_price) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </article>
+
+    <aside class="panel summary">
+        <p class="eyebrow">Pagamento</p>
+        <h2>Total do pedido</h2>
+        <div class="price-big">R$ {{ "%.2f"|format(pedido.total) }}</div>
+        <p class="pix-box">Chave PIX: <strong>{{ pix_key }}</strong></p>
+        <div class="auth-actions">
+            <a class="btn btn-primary full" href="{{ url_for('loja_cliente') }}">Voltar para a loja</a>
+            <a class="btn btn-secondary full" href="{{ url_for('index') }}">Ir para a vitrine</a>
+        </div>
+    </aside>
+</section>
+{% endblock %}

@@ -45,7 +45,11 @@
         </div>
         <div class="actions">
             {% if cliente_logado %}
-            <a class="btn btn-primary" href="{{ url_for('loja_cliente') }}">Ir para a lista de compras</a>
+            {% if catalogo_produto_id %}
+            <form method="post" action="{{ url_for('comprar_agora', product_id=catalogo_produto_id) }}" class="cta-form">
+                <button class="btn btn-primary" type="submit">Comprar agora</button>
+            </form>
+            {% endif %}
             <a class="btn btn-secondary" href="{{ url_for('ver_carrinho') }}">Abrir carrinho</a>
             {% else %}
             <a class="btn btn-primary" href="{{ url_for('cliente_login', next=url_for('loja_cliente')) }}">Entrar para comprar</a>

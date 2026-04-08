@@ -95,6 +95,36 @@ def garantir_imagens_produtos(db):
         db.commit()
 
 
+def garantir_produto_catalogo(db):
+    produto = db.execute("SELECT id FROM products WHERE LOWER(name) = LOWER(?)", ("Cattleya hibrida",)).fetchone()
+    if produto:
+        db.execute(
+            """
+            UPDATE products
+            SET category = ?, price = ?, stock = ?, status = ?, image_path = ?
+            WHERE id = ?
+            """,
+            ("Orquidea", 80.0, 6, "Disponivel", "cattleya.site.jpeg", produto["id"]),
+        )
+    else:
+        db.execute(
+            """
+            INSERT INTO products (name, category, price, stock, status, image_path, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "Cattleya hibrida",
+                "Orquidea",
+                80.0,
+                6,
+                "Disponivel",
+                "cattleya.site.jpeg",
+                datetime.now().strftime("%d/%m/%Y %H:%M"),
+            ),
+        )
+    db.commit()
+
+
 def init_db():
     preparar_armazenamento()
     db = get_db()
@@ -142,6 +172,7 @@ def init_db():
     )
     db.commit()
     importar_do_excel_se_necessario(db)
+    garantir_produto_catalogo(db)
     garantir_imagens_produtos(db)
 
 
@@ -256,6 +287,13 @@ def obter_destino_pos_login():
     return destino
 
 
+def obter_destino_pos_carrinho():
+    destino = request.form.get("next", "").strip()
+    if destino == "cart":
+        return url_for("ver_carrinho")
+    return url_for("loja_cliente")
+
+
 @app.route("/health")
 def healthcheck():
     db = get_db()
@@ -285,11 +323,16 @@ def index():
         "ambiente": "Vai muito bem em locais bem iluminados, com luz indireta e boa ventilacao.",
         "cuidados": "Rega moderada e substrato leve, sempre deixando secar entre uma irrigacao e outra.",
     }
+    produto_catalogo = db.execute(
+        "SELECT id FROM products WHERE LOWER(name) = LOWER(?) LIMIT 1",
+        (catalogo_publico["nome"],),
+    ).fetchone()
     return render_template(
         "index.html",
         contagens=contagens,
         destaques=destaques,
         catalogo_publico=catalogo_publico,
+        catalogo_produto_id=produto_catalogo["id"] if produto_catalogo else None,
     )
 
 
@@ -517,7 +560,16 @@ def adicionar_carrinho(product_id):
 
     session.modified = True
     flash("Produto adicionado ao carrinho.", "success")
-    return redirect(url_for("loja_cliente"))
+    return redirect(obter_destino_pos_carrinho())
+
+
+@app.post("/comprar-agora/<int:product_id>")
+@client_required
+def comprar_agora(product_id):
+    request.form = request.form.copy()
+    request.form["quantity"] = request.form.get("quantity", "1")
+    request.form["next"] = "cart"
+    return adicionar_carrinho(product_id)
 
 
 @app.route("/carrinho")
@@ -532,6 +584,29 @@ def ver_carrinho():
         pix_key=CONFIG["pix_key"],
         itens_carrinho=sum(item["quantity"] for item in cart),
     )
+
+
+@app.get("/pedido/<int:sale_id>")
+@client_required
+def pedido_confirmado(sale_id):
+    db = get_db()
+    pedido = db.execute(
+        "SELECT id, total, status, created_at FROM sales WHERE id = ? AND client_id = ?",
+        (sale_id, session["client_id"]),
+    ).fetchone()
+    if not pedido:
+        flash("Pedido nao encontrado.", "error")
+        return redirect(url_for("loja_cliente"))
+    itens = db.execute(
+        """
+        SELECT product_name, quantity, unit_price, total_price
+        FROM sale_items
+        WHERE sale_id = ?
+        ORDER BY id
+        """,
+        (sale_id,),
+    ).fetchall()
+    return render_template("pedido_confirmado.html", pedido=pedido, itens=itens, pix_key=CONFIG["pix_key"])
 
 
 @app.post("/carrinho/remover/<int:product_id>")
@@ -597,8 +672,8 @@ def checkout():
         return redirect(url_for("ver_carrinho"))
 
     session["cart"] = []
-    flash(f"Compra registrada com sucesso. Pagamento via PIX: {CONFIG['pix_key']}", "success")
-    return redirect(url_for("loja_cliente"))
+    flash("Compra registrada com sucesso.", "success")
+    return redirect(url_for("pedido_confirmado", sale_id=sale_id))
 
 
 if __name__ == "__main__":
