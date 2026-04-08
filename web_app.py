@@ -275,7 +275,41 @@ def client_required(view):
 
 
 def carrinho_atual():
-    return session.setdefault("cart", [])
+    cart = session.setdefault("cart", [])
+    cart_normalizado = []
+    houve_ajuste = False
+
+    for item in cart:
+        try:
+            product_id = int(item.get("product_id"))
+            nome = str(item.get("name", "")).strip()
+            unit_price = float(item.get("unit_price", 0))
+            quantidade = int(item.get("quantity", 0))
+        except (AttributeError, TypeError, ValueError):
+            houve_ajuste = True
+            continue
+
+        if product_id <= 0 or not nome or unit_price < 0 or quantidade <= 0:
+            houve_ajuste = True
+            continue
+
+        cart_normalizado.append(
+            {
+                "product_id": product_id,
+                "name": nome,
+                "unit_price": unit_price,
+                "quantity": quantidade,
+            }
+        )
+
+        if item != cart_normalizado[-1]:
+            houve_ajuste = True
+
+    if houve_ajuste or len(cart_normalizado) != len(cart):
+        session["cart"] = cart_normalizado
+        session.modified = True
+
+    return session["cart"]
 
 
 def obter_destino_pos_login():
@@ -292,6 +326,36 @@ def obter_destino_pos_carrinho():
     if destino == "cart":
         return url_for("ver_carrinho")
     return url_for("loja_cliente")
+
+
+def adicionar_item_ao_carrinho(product_id, quantidade):
+    if quantidade <= 0:
+        return "Quantidade invalida.", "error"
+
+    produto = get_db().execute("SELECT * FROM products WHERE id = ?", (product_id,)).fetchone()
+    if not produto:
+        return "Produto nao encontrado.", "error"
+    if produto["stock"] < quantidade:
+        return "Estoque insuficiente para esse produto.", "error"
+
+    cart = carrinho_atual()
+    existente = next((item for item in cart if item["product_id"] == product_id), None)
+    if existente:
+        if existente["quantity"] + quantidade > produto["stock"]:
+            return "A quantidade total no carrinho excede o estoque.", "error"
+        existente["quantity"] += quantidade
+    else:
+        cart.append(
+            {
+                "product_id": product_id,
+                "name": produto["name"],
+                "unit_price": float(produto["price"]),
+                "quantity": quantidade,
+            }
+        )
+
+    session.modified = True
+    return "Produto adicionado ao carrinho.", "success"
 
 
 @app.route("/health")
@@ -528,48 +592,21 @@ def adicionar_carrinho(product_id):
         quantidade = int(request.form.get("quantity", "1"))
     except ValueError:
         quantidade = 0
-
-    if quantidade <= 0:
-        flash("Quantidade invalida.", "error")
-        return redirect(url_for("loja_cliente"))
-
-    produto = get_db().execute("SELECT * FROM products WHERE id = ?", (product_id,)).fetchone()
-    if not produto:
-        flash("Produto nao encontrado.", "error")
-        return redirect(url_for("loja_cliente"))
-    if produto["stock"] < quantidade:
-        flash("Estoque insuficiente para esse produto.", "error")
-        return redirect(url_for("loja_cliente"))
-
-    cart = carrinho_atual()
-    existente = next((item for item in cart if item["product_id"] == product_id), None)
-    if existente:
-        if existente["quantity"] + quantidade > produto["stock"]:
-            flash("A quantidade total no carrinho excede o estoque.", "error")
-            return redirect(url_for("loja_cliente"))
-        existente["quantity"] += quantidade
-    else:
-        cart.append(
-            {
-                "product_id": product_id,
-                "name": produto["name"],
-                "unit_price": float(produto["price"]),
-                "quantity": quantidade,
-            }
-        )
-
-    session.modified = True
-    flash("Produto adicionado ao carrinho.", "success")
+    mensagem, categoria = adicionar_item_ao_carrinho(product_id, quantidade)
+    flash(mensagem, categoria)
     return redirect(obter_destino_pos_carrinho())
 
 
 @app.post("/comprar-agora/<int:product_id>")
 @client_required
 def comprar_agora(product_id):
-    request.form = request.form.copy()
-    request.form["quantity"] = request.form.get("quantity", "1")
-    request.form["next"] = "cart"
-    return adicionar_carrinho(product_id)
+    try:
+        quantidade = int(request.form.get("quantity", "1"))
+    except ValueError:
+        quantidade = 0
+    mensagem, categoria = adicionar_item_ao_carrinho(product_id, quantidade)
+    flash(mensagem, categoria)
+    return redirect(url_for("ver_carrinho"))
 
 
 @app.route("/carrinho")
