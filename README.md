@@ -1,83 +1,156 @@
-# CRUD com Excel em Python
+# Flask + Pix Automatico com PagBank
 
-Aplicacao desktop em Python com Tkinter e Excel para cadastro de clientes, produtos e vendas.
+Projeto Flask com fluxo de pedido estilo e-commerce, geracao automatica de cobranca Pix no PagBank, webhook de confirmacao e atualizacao da tela em tempo real.
 
-## Requisitos
+## O que o sistema faz
 
-- Python 3
-- Dependencias do `requirements.txt`
+- Cria pedidos no SQLite com valor e status
+- Gera cobranca Pix pelo endpoint `POST /criar_pix`
+- Retorna codigo Pix copia e cola, QR Code em base64 e identificador da cobranca
+- Recebe notificacoes no endpoint `POST /webhook`
+- Consulta o pedido no PagBank e atualiza o pedido para `pago`
+- Mostra o QR Code na pagina do pedido e acompanha o status com JavaScript
+- Envia email automatico quando o pagamento for aprovado se SMTP estiver configurado
 
 ## Instalar dependencias
 
 ```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
 
-## Executar desktop
+## Configuracao do PagBank
 
-```powershell
-python .\excel_crud.py
+1. Copie `config.example.json` para `config.json`.
+2. Abra `config.json`.
+3. Cole seu token em `pagbank_token`.
+4. Se for validar a autenticidade do webhook, preencha `pagbank_webhook_token`.
+5. Defina uma URL publica em `pagbank_notification_url` ou configure `loja_base_url`.
+6. Ajuste `pagbank_api_base`:
+   - Sandbox: `https://sandbox.api.pagseguro.com`
+   - Producao: `https://api.pagseguro.com`
+
+Exemplo:
+
+```json
+{
+  "pagbank_token": "SEU_TOKEN_PAGBANK",
+  "pagbank_webhook_token": "seu-token-do-webhook",
+  "pagbank_notification_url": "https://SEU-ENDERECO/webhook",
+  "pagbank_api_base": "https://sandbox.api.pagseguro.com",
+  "loja_base_url": "https://SEU-ENDERECO"
+}
 ```
 
-## Executar web
+Voce tambem pode usar variaveis de ambiente:
+
+- `PAGBANK_TOKEN`
+- `PAGBANK_WEBHOOK_TOKEN`
+- `PAGBANK_NOTIFICATION_URL`
+- `PAGBANK_API_BASE`
+- `APP_BASE_URL`
+- `SMTP_HOST`
+- `SMTP_PORT`
+- `SMTP_USER`
+- `SMTP_PASSWORD`
+- `SMTP_SENDER`
+- `SMTP_USE_TLS`
+
+## Como rodar
 
 ```powershell
 python .\web_app.py
 ```
 
-Depois abra `http://127.0.0.1:5000`.
+Abra `http://127.0.0.1:5000`.
 
-## Pronto para deploy
+## Fluxo de uso
 
-O projeto agora inclui:
+1. Entre como cliente ou crie um cadastro.
+2. Adicione produtos ao carrinho.
+3. Clique em `Finalizar compra`.
+4. Na pagina do pedido, clique em `Pagar com Pix`.
+5. O sistema chama `POST /criar_pix`, cria um `order` no PagBank e mostra o QR Code.
+6. A tela entra em modo `Aguardando pagamento...`.
+7. Quando o PagBank enviar o webhook e a cobranca ficar com status `PAID`, o pedido muda para `pago`.
 
-- `wsgi.py` para servidor WSGI
-- `Procfile` para plataformas que usam comando de processo
-- `render.yaml` com configuracao inicial para Render
-- suporte a `PORT`, `FLASK_ENV`, `WEB_APP_DATA_DIR` e `WEB_APP_DB_PATH`
-- endpoint de health check em `/health`
+## Endpoints principais
 
-## Configuracao opcional
+### `POST /criar_pix`
 
-Voce pode criar um `config.json` na pasta do projeto usando o modelo `config.example.json`.
+Body JSON de exemplo:
 
-Tambem e possivel sobrescrever os valores por variaveis de ambiente:
+```json
+{
+  "pedido_id": 1,
+  "valor": 150.0
+}
+```
 
-- `ORQ_ADMIN_EMAIL`
-- `ORQ_ADMIN_PASSWORD`
-- `ORQ_PIX_KEY`
-- `ORQ_WEB_SECRET_KEY`
-- `WEB_APP_DATA_DIR`
-- `WEB_APP_DB_PATH`
+Resposta de exemplo:
 
-## Funcionalidades
+```json
+{
+  "pedido_id": 1,
+  "payment_id": "CHAR_123",
+  "status": "WAITING",
+  "qr_code": "00020126...",
+  "qr_code_base64": "iVBORw0KGgoAAA...",
+  "ticket_url": "https://sandbox.api.pagseguro.com/qrcode/QRCO_123/png"
+}
+```
 
-- CRUD de clientes
-- CRUD de produtos
-- Carrinho e finalizacao de compras
-- Registro de vendas em planilha
-- Login de administrador
-- Login e cadastro rapido de clientes
-- Versao web inicial com Flask e SQLite
+### `POST /webhook`
 
-## Arquivos de dados
+Recebe a notificacao do PagBank, consulta o pedido por `id` e atualiza o pedido:
 
-- `clientes.xlsx`: base local com clientes, produtos e vendas
-- `config.json`: configuracao local de credenciais e chave PIX
-- `web_app.db`: banco SQLite usado pela versao web
+- `pendente` enquanto a cobranca estiver aguardando pagamento
+- `pago` quando o status da cobranca no PagBank virar `PAID`
 
-## Observacoes da versao web
+## Como testar
 
-- Na primeira execucao, a versao web tenta importar clientes e produtos do `clientes.xlsx`
-- Clientes importados do Excel entram com senha inicial igual ao CPF numerico
-- O login web do cliente usa `CPF + senha`
-- Em hospedagem, use disco persistente para o SQLite se quiser manter os dados
+1. Gere um token no painel do PagBank Developers.
+2. Configure `pagbank_api_base` com sandbox ou producao.
+3. Rode a aplicacao localmente.
+4. Exponha sua URL local com uma ferramenta como `ngrok`.
+5. Configure no `config.json`:
+   - `pagbank_notification_url`: `https://abc123.ngrok-free.app/webhook`
+   - `loja_base_url`: `https://abc123.ngrok-free.app`
+6. Gere um pedido e clique em `Pagar com Pix`.
+7. Faça o pagamento e verifique se o webhook chegou e se o pedido mudou para `pago`.
 
-## Exemplo de deploy no Render
+Observacoes importantes:
 
-1. Suba esse projeto para o GitHub.
-2. No Render, crie um novo `Web Service` apontando para o repositorio.
-3. Se quiser, use o `render.yaml` do projeto.
-4. Configure as variaveis `ORQ_ADMIN_EMAIL`, `ORQ_ADMIN_PASSWORD`, `ORQ_PIX_KEY` e `ORQ_WEB_SECRET_KEY`.
-5. Adicione um disco persistente e monte em `/var/data`.
-6. Publique o servico.
+- O cliente precisa ter CPF cadastrado para gerar Pix no PagBank.
+- O webhook precisa de uma URL publica real.
+- Se voce configurar `pagbank_webhook_token`, o app valida o header `x-authenticity-token`.
+
+## Email automatico
+
+O envio de email e opcional. Para ativar, preencha no `config.json`:
+
+```json
+{
+  "smtp_host": "smtp.seuprovedor.com",
+  "smtp_port": "587",
+  "smtp_user": "usuario",
+  "smtp_password": "senha",
+  "smtp_sender": "loja@seudominio.com",
+  "smtp_use_tls": "true"
+}
+```
+
+## Estrutura usada no banco
+
+- `sales`: pedido simples com valor e status
+- `sale_items`: itens do pedido
+- `pix_payments`: dados do pagamento Pix e ids do PagBank
+
+## Arquivos principais
+
+- `web_app.py`: backend Flask, integracao HTTP com PagBank, webhook e email
+- `templates/pedido_confirmado.html`: botao Pix, QR Code e polling de status
+- `templates/carrinho.html`: resumo do checkout
+- `config.example.json`: modelo de configuracao

@@ -11,7 +11,7 @@
     <article class="panel grow">
         <p class="eyebrow">Pedido confirmado</p>
         <h1>Seu pedido foi registrado</h1>
-        <p class="section-copy">Agora e so realizar o pagamento via PIX para concluir a compra do seu pedido.</p>
+        <p class="section-copy">Gere o Pix automatico para concluir a compra. Assim que o PagBank confirmar o pagamento, esta tela sera atualizada sozinha.</p>
         <div class="confirmation-grid">
             <div class="confirmation-card">
                 <span>Numero do pedido</span>
@@ -24,6 +24,10 @@
             <div class="confirmation-card">
                 <span>Data</span>
                 <strong>{{ pedido.created_at }}</strong>
+            </div>
+            <div class="confirmation-card">
+                <span>Atualizacao</span>
+                <strong id="pedido-status-texto">{{ pedido.status|capitalize }}</strong>
             </div>
         </div>
         <div class="table-wrap">
@@ -47,11 +51,152 @@
         <p class="eyebrow">Pagamento</p>
         <h2>Total do pedido</h2>
         <div class="price-big">R$ {{ "%.2f"|format(pedido.total) }}</div>
-        <p class="pix-box">Chave PIX: <strong>{{ pix_key }}</strong></p>
+        <p class="pix-box">Pedido #{{ pedido.id }} pronto para Pix automatico.</p>
+        {% if pagbank_configurado %}
+        <button class="btn btn-primary full" id="gerar-pix-btn" type="button">Pagar com Pix</button>
+        <p class="section-copy payment-feedback" id="pix-feedback">
+            {% if pagamento_pix and pagamento_pix.status|upper == "PAID" %}
+            Pagamento aprovado.
+            {% elif pagamento_pix %}
+            Aguardando pagamento...
+            {% else %}
+            Clique no botao para gerar o QR Code do PagBank.
+            {% endif %}
+        </p>
+        <div class="pix-payment-box {% if not pagamento_pix %}hidden{% endif %}" id="pix-box">
+            <img
+                alt="QR Code Pix"
+                class="pix-qr"
+                id="pix-qr-image"
+                src="{% if pagamento_pix and pagamento_pix.qr_code_base64 %}data:image/png;base64,{{ pagamento_pix.qr_code_base64 }}{% endif %}"
+            >
+            <label class="pix-label" for="pix-copia-cola">Codigo Pix copia e cola</label>
+            <textarea class="pix-copy-field" id="pix-copia-cola" readonly>{% if pagamento_pix %}{{ pagamento_pix.qr_code }}{% endif %}</textarea>
+            <button class="btn btn-secondary full" id="copiar-pix-btn" type="button">Copiar codigo Pix</button>
+        </div>
+        {% else %}
+        <p class="pix-box">Configure o PagBank para gerar o Pix automatico.</p>
+        {% endif %}
         <div class="auth-actions">
             <a class="btn btn-primary full" href="{{ url_for('loja_cliente') }}">Voltar para a loja</a>
             <a class="btn btn-secondary full" href="{{ url_for('index') }}">Ir para a vitrine</a>
         </div>
     </aside>
 </section>
+
+{% if pagbank_configurado %}
+<script>
+    (() => {
+        const pedidoId = {{ pedido.id }};
+        const statusUrl = "{{ url_for('status_pedido', sale_id=pedido.id) }}";
+        const criarPixUrl = "{{ url_for('criar_pix') }}";
+        const gerarBtn = document.getElementById("gerar-pix-btn");
+        const copiarBtn = document.getElementById("copiar-pix-btn");
+        const feedback = document.getElementById("pix-feedback");
+        const pixBox = document.getElementById("pix-box");
+        const qrImage = document.getElementById("pix-qr-image");
+        const copiaCola = document.getElementById("pix-copia-cola");
+        const statusTexto = document.getElementById("pedido-status-texto");
+        let pollingAtivo = false;
+
+        function atualizarMensagem(texto, classe = "") {
+            feedback.textContent = texto;
+            feedback.dataset.state = classe;
+        }
+
+        function aplicarStatus(dados) {
+            const status = String(dados.status || "").toLowerCase();
+            statusTexto.textContent = status === "pago" ? "Pago" : "Pendente";
+            if (status === "pago") {
+                atualizarMensagem("Pagamento aprovado.", "success");
+                gerarBtn.disabled = true;
+                gerarBtn.textContent = "Pagamento aprovado";
+                pollingAtivo = false;
+                return;
+            }
+            atualizarMensagem("Aguardando pagamento...", "pending");
+            if (!pollingAtivo) {
+                iniciarPolling();
+            }
+        }
+
+        async function consultarStatus() {
+            const resposta = await fetch(statusUrl, {
+                headers: { "Accept": "application/json" }
+            });
+            if (!resposta.ok) {
+                return;
+            }
+            const dados = await resposta.json();
+            aplicarStatus(dados);
+        }
+
+        function iniciarPolling() {
+            if (pollingAtivo) {
+                return;
+            }
+            pollingAtivo = true;
+            const intervalo = setInterval(async () => {
+                if (!pollingAtivo) {
+                    clearInterval(intervalo);
+                    return;
+                }
+                await consultarStatus();
+                if (!pollingAtivo) {
+                    clearInterval(intervalo);
+                }
+            }, 5000);
+        }
+
+        gerarBtn?.addEventListener("click", async () => {
+            gerarBtn.disabled = true;
+            gerarBtn.textContent = "Gerando Pix...";
+            atualizarMensagem("Gerando cobranca Pix...", "pending");
+            try {
+                const resposta = await fetch(criarPixUrl, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Accept": "application/json"
+                    },
+                    body: JSON.stringify({
+                        pedido_id: pedidoId,
+                        valor: {{ "%.2f"|format(pedido.total)|replace(",", ".") }}
+                    })
+                });
+                const dados = await resposta.json();
+                if (!resposta.ok) {
+                    throw new Error(dados.erro || "Nao foi possivel gerar o Pix.");
+                }
+                if (dados.qr_code_base64) {
+                    qrImage.src = `data:image/png;base64,${dados.qr_code_base64}`;
+                }
+                copiaCola.value = dados.qr_code || "";
+                pixBox.classList.remove("hidden");
+                gerarBtn.textContent = "Pix gerado";
+                aplicarStatus({ status: String(dados.status || "").toUpperCase() === "PAID" ? "pago" : "pendente" });
+            } catch (erro) {
+                gerarBtn.disabled = false;
+                gerarBtn.textContent = "Pagar com Pix";
+                atualizarMensagem(erro.message, "error");
+            }
+        });
+
+        copiarBtn?.addEventListener("click", async () => {
+            if (!copiaCola.value) {
+                return;
+            }
+            await navigator.clipboard.writeText(copiaCola.value);
+            atualizarMensagem("Codigo Pix copiado. Aguardando pagamento...", "pending");
+        });
+
+        if ("{{ pedido.status|lower }}" === "pago") {
+            aplicarStatus({ status: "pago" });
+        } else if ({% if pagamento_pix %}true{% else %}false{% endif %}) {
+            atualizarMensagem("Aguardando pagamento...", "pending");
+            iniciarPolling();
+        }
+    })();
+</script>
+{% endif %}
 {% endblock %}

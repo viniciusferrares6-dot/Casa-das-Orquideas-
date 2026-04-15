@@ -1,5 +1,16 @@
 {
   "admin_email": "admin@orquideas.local",
   "admin_password": "troque-esta-senha",
-  "pix_key": "sua-chave-pix"
+  "pix_key": "sua-chave-pix",
+  "pagbank_token": "SEU_TOKEN_PAGBANK",
+  "pagbank_webhook_token": "seu-token-do-webhook",
+  "pagbank_notification_url": "https://seu-endereco-publico/webhook",
+  "pagbank_api_base": "https://sandbox.api.pagseguro.com",
+  "loja_base_url": "https://seu-endereco-publico",
+  "smtp_host": "smtp.seuprovedor.com",
+  "smtp_port": "587",
+  "smtp_user": "usuario",
+  "smtp_password": "senha",
+  "smtp_sender": "loja@seudominio.com",
+  "smtp_use_tls": "true"
 }

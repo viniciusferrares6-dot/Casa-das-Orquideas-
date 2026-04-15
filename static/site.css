@@ -843,6 +843,62 @@ th {
     border: 1px solid var(--line);
 }
 
+.pix-payment-box {
+    display: grid;
+    gap: 12px;
+    margin: 18px 0 20px;
+    padding: 18px;
+    border-radius: 24px;
+    border: 1px solid rgba(198, 82, 105, 0.3);
+    background: linear-gradient(180deg, rgba(42, 43, 51, 0.98), rgba(28, 29, 35, 0.94));
+}
+
+.pix-payment-box.hidden {
+    display: none;
+}
+
+.pix-qr {
+    width: min(100%, 260px);
+    height: auto;
+    margin: 0 auto;
+    aspect-ratio: 1 / 1;
+    object-fit: contain;
+    padding: 14px;
+    border-radius: 24px;
+    background: #ffffff;
+}
+
+.pix-label {
+    color: var(--muted);
+    font-size: 0.82rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+}
+
+.pix-copy-field {
+    width: 100%;
+    min-height: 130px;
+    resize: vertical;
+    padding: 14px;
+    border-radius: 18px;
+    border: 1px solid rgba(198, 82, 105, 0.24);
+    background: rgba(14, 15, 19, 0.9);
+    color: var(--ink);
+    line-height: 1.5;
+}
+
+.payment-feedback[data-state="success"] {
+    color: #8df2b0;
+}
+
+.payment-feedback[data-state="error"] {
+    color: #ff9f9f;
+}
+
+.payment-feedback[data-state="pending"] {
+    color: #f3d5db;
+}
+
 .empty-state {
     color: var(--muted);
 }

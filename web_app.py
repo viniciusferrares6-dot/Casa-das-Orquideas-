@@ -1,14 +1,21 @@
 from __future__ import annotations
 
 from datetime import datetime
+from email.message import EmailMessage
 from functools import wraps
 from pathlib import Path
+import hashlib
+import hmac
 import json
 import os
 import re
+import smtplib
 import sqlite3
+import ssl
+from urllib import error as urllib_error
+from urllib import request as urllib_request
 
-from flask import Flask, flash, g, redirect, render_template, request, send_from_directory, session, url_for
+from flask import Flask, flash, g, jsonify, redirect, render_template, request, send_from_directory, session, url_for
 from openpyxl import load_workbook
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -27,6 +34,17 @@ def carregar_configuracoes():
         "admin_password": "1234",
         "pix_key": "pix@orquideas.local",
         "secret_key": "orquideas-web-dev",
+        "pagbank_token": "",
+        "pagbank_webhook_token": "",
+        "pagbank_notification_url": "",
+        "pagbank_api_base": "https://sandbox.api.pagseguro.com",
+        "loja_base_url": "",
+        "smtp_host": "",
+        "smtp_port": "587",
+        "smtp_user": "",
+        "smtp_password": "",
+        "smtp_sender": "",
+        "smtp_use_tls": "true",
     }
     if CONFIG_PATH.exists():
         try:
@@ -40,6 +58,23 @@ def carregar_configuracoes():
     configuracoes["admin_password"] = os.getenv("ORQ_ADMIN_PASSWORD", configuracoes["admin_password"])
     configuracoes["pix_key"] = os.getenv("ORQ_PIX_KEY", configuracoes["pix_key"]).strip()
     configuracoes["secret_key"] = os.getenv("ORQ_WEB_SECRET_KEY", configuracoes["secret_key"])
+    configuracoes["pagbank_token"] = os.getenv("PAGBANK_TOKEN", configuracoes["pagbank_token"]).strip()
+    configuracoes["pagbank_webhook_token"] = os.getenv(
+        "PAGBANK_WEBHOOK_TOKEN", configuracoes["pagbank_webhook_token"]
+    ).strip()
+    configuracoes["pagbank_notification_url"] = os.getenv(
+        "PAGBANK_NOTIFICATION_URL", configuracoes["pagbank_notification_url"]
+    ).strip()
+    configuracoes["pagbank_api_base"] = os.getenv("PAGBANK_API_BASE", configuracoes["pagbank_api_base"]).strip().rstrip(
+        "/"
+    )
+    configuracoes["loja_base_url"] = os.getenv("APP_BASE_URL", configuracoes["loja_base_url"]).strip().rstrip("/")
+    configuracoes["smtp_host"] = os.getenv("SMTP_HOST", configuracoes["smtp_host"]).strip()
+    configuracoes["smtp_port"] = os.getenv("SMTP_PORT", configuracoes["smtp_port"]).strip()
+    configuracoes["smtp_user"] = os.getenv("SMTP_USER", configuracoes["smtp_user"]).strip()
+    configuracoes["smtp_password"] = os.getenv("SMTP_PASSWORD", configuracoes["smtp_password"])
+    configuracoes["smtp_sender"] = os.getenv("SMTP_SENDER", configuracoes["smtp_sender"]).strip()
+    configuracoes["smtp_use_tls"] = os.getenv("SMTP_USE_TLS", configuracoes["smtp_use_tls"]).strip().lower()
     return configuracoes
 
 
@@ -52,6 +87,203 @@ app.config["SESSION_COOKIE_SECURE"] = os.getenv("FLASK_ENV") == "production"
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
 
+def agora_texto():
+    return datetime.now().strftime("%d/%m/%Y %H:%M")
+
+
+def parse_bool(valor):
+    return str(valor or "").strip().lower() in {"1", "true", "yes", "sim", "on"}
+
+
+def parse_float(valor, padrao=0.0):
+    try:
+        return float(str(valor).replace(",", "."))
+    except (TypeError, ValueError):
+        return padrao
+
+
+def normalizar_email(email):
+    return str(email or "").strip().lower()
+
+
+def url_publica_base():
+    if CONFIG["loja_base_url"]:
+        return CONFIG["loja_base_url"]
+    return request.host_url.rstrip("/")
+
+
+def pagbank_configurado():
+    return bool(CONFIG["pagbank_token"])
+
+
+def obter_pagbank_api_base():
+    return (CONFIG["pagbank_api_base"] or "https://sandbox.api.pagseguro.com").rstrip("/")
+
+
+def validar_assinatura_webhook():
+    token = CONFIG["pagbank_webhook_token"]
+    if not token:
+        return True
+
+    assinatura_recebida = request.headers.get("x-authenticity-token", "").strip()
+    corpo = request.get_data(cache=True, as_text=True)
+    if not assinatura_recebida or not corpo:
+        return False
+
+    manifesto = f"{token}-{corpo}"
+    hash_esperado = hashlib.sha256(manifesto.encode("utf-8")).hexdigest()
+    return hmac.compare_digest(hash_esperado, assinatura_recebida)
+
+
+def pagbank_headers(media_type="application/json"):
+    token = CONFIG["pagbank_token"]
+    if not token:
+        raise RuntimeError("Token do PagBank nao configurado.")
+    return {
+        "Authorization": f"Bearer {token}",
+        "Accept": media_type,
+        "Content-Type": "application/json",
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/135.0.0.0 Safari/537.36 CasaDasOrquideas/1.0"
+        ),
+    }
+
+
+def extrair_erro_pagbank(corpo_resposta, padrao):
+    try:
+        dados = json.loads(corpo_resposta)
+    except json.JSONDecodeError:
+        return padrao
+    mensagens = []
+    for item in dados.get("error_messages", []):
+        descricao = str(item.get("description") or item.get("error") or "").strip()
+        if descricao:
+            mensagens.append(descricao)
+    if mensagens:
+        return "; ".join(mensagens)
+    return padrao
+
+
+def chamar_api_pagbank(metodo, caminho_ou_url, payload=None, accept="application/json"):
+    url = caminho_ou_url if str(caminho_ou_url).startswith("http") else f"{obter_pagbank_api_base()}{caminho_ou_url}"
+    corpo = None if payload is None else json.dumps(payload, ensure_ascii=True).encode("utf-8")
+    headers = pagbank_headers(accept)
+    requisicao = urllib_request.Request(url, data=corpo, method=metodo.upper(), headers=headers)
+    try:
+        with urllib_request.urlopen(requisicao, timeout=30) as resposta:
+            conteudo = resposta.read().decode("utf-8")
+    except urllib_error.HTTPError as erro:
+        conteudo = erro.read().decode("utf-8", errors="replace")
+        raise RuntimeError(extrair_erro_pagbank(conteudo, f"PagBank retornou HTTP {erro.code}.")) from erro
+    except urllib_error.URLError as erro:
+        raise RuntimeError(f"Falha de conexao com o PagBank: {erro.reason}") from erro
+
+    if accept == "application/json":
+        try:
+            return json.loads(conteudo)
+        except json.JSONDecodeError as erro:
+            raise RuntimeError("PagBank retornou uma resposta invalida.") from erro
+    return conteudo.strip()
+
+
+def extrair_link(qr_code, rel):
+    for item in qr_code.get("links", []):
+        if str(item.get("rel") or "").upper() == rel.upper():
+            return str(item.get("href") or "").strip()
+    return ""
+
+
+def primeiro_qr_code(dados):
+    qr_codes = dados.get("qr_codes") or dados.get("qr_code") or []
+    return qr_codes[0] if qr_codes else {}
+
+
+def parse_pagbank_datetime(valor):
+    texto = str(valor or "").strip()
+    if not texto:
+        return None
+    for formato in ("%Y-%m-%dT%H:%M:%S.%f%z", "%Y-%m-%dT%H:%M:%S%z"):
+        try:
+            return datetime.strptime(texto, formato).strftime("%d/%m/%Y %H:%M")
+        except ValueError:
+            continue
+    return None
+
+
+def status_pagbank_para_pedido(status_pagbank):
+    return "pago" if str(status_pagbank or "").upper() == "PAID" else "pendente"
+
+
+def telefone_pagbank(telefone):
+    digitos = re.sub(r"\D", "", str(telefone or ""))
+    if len(digitos) < 10:
+        return None
+    if len(digitos) in {10, 11}:
+        return {
+            "country": "55",
+            "area": digitos[:2],
+            "number": digitos[2:],
+            "type": "MOBILE",
+        }
+    if len(digitos) == 12:
+        return {
+            "country": digitos[:-10] or "55",
+            "area": digitos[-10:-8],
+            "number": digitos[-8:],
+            "type": "MOBILE",
+        }
+    if len(digitos) >= 13:
+        return {
+            "country": digitos[:-11] or "55",
+            "area": digitos[-11:-9],
+            "number": digitos[-9:],
+            "type": "MOBILE",
+        }
+    return None
+
+
+def enviar_email_pagamento_aprovado(destinatario, pedido_id, total):
+    destinatario = normalizar_email(destinatario)
+    if not destinatario:
+        return False, "Cliente sem email cadastrado."
+    if not CONFIG["smtp_host"] or not CONFIG["smtp_sender"]:
+        return False, "SMTP nao configurado."
+
+    mensagem = EmailMessage()
+    mensagem["Subject"] = f"Pagamento aprovado do pedido #{pedido_id}"
+    mensagem["From"] = CONFIG["smtp_sender"]
+    mensagem["To"] = destinatario
+    mensagem.set_content(
+        "\n".join(
+            [
+                "Ola!",
+                "",
+                f"Recebemos a confirmacao do pagamento Pix do pedido #{pedido_id}.",
+                f"Valor aprovado: R$ {total:.2f}",
+                "",
+                "Seu pedido agora esta com status pago.",
+                "",
+                "Equipe Casa das Orquideas",
+            ]
+        )
+    )
+
+    porta = int(CONFIG["smtp_port"] or "587")
+    usar_tls = parse_bool(CONFIG["smtp_use_tls"])
+    contexto_ssl = ssl.create_default_context()
+    with smtplib.SMTP(CONFIG["smtp_host"], porta, timeout=20) as servidor:
+        servidor.ehlo()
+        if usar_tls:
+            servidor.starttls(context=contexto_ssl)
+            servidor.ehlo()
+        if CONFIG["smtp_user"]:
+            servidor.login(CONFIG["smtp_user"], CONFIG["smtp_password"])
+        servidor.send_message(mensagem)
+    return True, "Email enviado."
+
+
 def preparar_armazenamento():
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
@@ -61,6 +293,53 @@ def get_db():
         g.db = sqlite3.connect(DB_PATH)
         g.db.row_factory = sqlite3.Row
     return g.db
+
+
+def coluna_existe(db, tabela, coluna):
+    colunas = db.execute(f"PRAGMA table_info({tabela})").fetchall()
+    return any(item["name"] == coluna for item in colunas)
+
+
+def garantir_colunas_pix(db):
+    colunas_sales = {
+        "paid_at": "ALTER TABLE sales ADD COLUMN paid_at TEXT",
+        "updated_at": "ALTER TABLE sales ADD COLUMN updated_at TEXT",
+    }
+    for coluna, sql in colunas_sales.items():
+        if not coluna_existe(db, "sales", coluna):
+            db.execute(sql)
+
+    db.execute(
+        """
+        CREATE TABLE IF NOT EXISTS pix_payments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sale_id INTEGER NOT NULL UNIQUE,
+            mercado_pago_payment_id TEXT,
+            pagbank_order_id TEXT,
+            pagbank_charge_id TEXT,
+            pagbank_qr_code_id TEXT,
+            external_reference TEXT,
+            status TEXT NOT NULL,
+            status_detail TEXT,
+            qr_code TEXT,
+            qr_code_base64 TEXT,
+            ticket_url TEXT,
+            notification_email_sent INTEGER NOT NULL DEFAULT 0,
+            raw_response TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            approved_at TEXT
+        );
+        """
+    )
+    colunas_pix = {
+        "pagbank_order_id": "ALTER TABLE pix_payments ADD COLUMN pagbank_order_id TEXT",
+        "pagbank_charge_id": "ALTER TABLE pix_payments ADD COLUMN pagbank_charge_id TEXT",
+        "pagbank_qr_code_id": "ALTER TABLE pix_payments ADD COLUMN pagbank_qr_code_id TEXT",
+    }
+    for coluna, sql in colunas_pix.items():
+        if not coluna_existe(db, "pix_payments", coluna):
+            db.execute(sql)
 
 
 @app.teardown_appcontext
@@ -170,6 +449,7 @@ def init_db():
         );
         """
     )
+    garantir_colunas_pix(db)
     db.commit()
     importar_do_excel_se_necessario(db)
     garantir_produto_catalogo(db)
@@ -361,6 +641,275 @@ def adicionar_item_ao_carrinho(product_id, quantidade):
 
     session.modified = True
     return "Produto adicionado ao carrinho.", "success"
+
+
+def buscar_pedido_por_id(sale_id, client_id=None):
+    db = get_db()
+    sql = """
+        SELECT
+            s.id,
+            s.client_id,
+            s.client_name,
+            s.total,
+            s.status,
+            s.created_at,
+            s.updated_at,
+            s.paid_at,
+            c.email AS client_email,
+            c.cpf AS client_cpf,
+            c.phone AS client_phone
+        FROM sales s
+        LEFT JOIN clients c ON c.id = s.client_id
+        WHERE s.id = ?
+    """
+    parametros = [sale_id]
+    if client_id is not None:
+        sql += " AND s.client_id = ?"
+        parametros.append(client_id)
+    return db.execute(sql, tuple(parametros)).fetchone()
+
+
+def buscar_pagamento_pix_por_pedido(sale_id):
+    return get_db().execute("SELECT * FROM pix_payments WHERE sale_id = ?", (sale_id,)).fetchone()
+
+
+def garantir_pedido_simples(valor, client_id=None, client_name=None):
+    total = round(parse_float(valor), 2)
+    if total <= 0:
+        raise ValueError("Informe um valor maior que zero.")
+
+    db = get_db()
+    cliente_nome = client_name or session.get("client_name") or "Pedido Pix"
+    cursor = db.execute(
+        """
+        INSERT INTO sales (client_id, client_name, total, status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (client_id, cliente_nome, total, "pendente", agora_texto(), agora_texto()),
+    )
+    db.commit()
+    return cursor.lastrowid
+
+
+def payload_pix_pagbank(pedido):
+    tax_id = normalizar_cpf(pedido["client_cpf"])
+    if len(tax_id) not in {11, 14}:
+        raise RuntimeError("O cliente precisa ter CPF ou CNPJ cadastrado para gerar Pix no PagBank.")
+
+    notification_url = CONFIG["pagbank_notification_url"] or f"{url_publica_base()}{url_for('webhook_pagbank')}"
+    email_pagador = normalizar_email(pedido["client_email"]) or CONFIG["admin_email"]
+    payload = {
+        "reference_id": str(pedido["id"]),
+        "customer": {
+            "name": str(pedido["client_name"] or "Cliente")[:120],
+            "email": email_pagador,
+            "tax_id": tax_id,
+        },
+        "items": [
+            {
+                "reference_id": f"pedido-{pedido['id']}",
+                "name": f"Pedido #{pedido['id']} - Casa das Orquideas",
+                "quantity": 1,
+                "unit_amount": int(round(float(pedido["total"]) * 100)),
+            }
+        ],
+        "qr_codes": [
+            {
+                "amount": {
+                    "value": int(round(float(pedido["total"]) * 100)),
+                }
+            }
+        ],
+        "notification_urls": [notification_url],
+    }
+    telefone = telefone_pagbank(pedido["client_phone"])
+    if telefone:
+        payload["customer"]["phones"] = [telefone]
+    return payload
+
+
+def criar_pagamento_pix_pagbank(pedido):
+    dados = chamar_api_pagbank("POST", "/orders", payload=payload_pix_pagbank(pedido))
+    qr_code_info = primeiro_qr_code(dados)
+    charge = (dados.get("charges") or [{}])[0]
+    qr_code = str(qr_code_info.get("text") or "").strip()
+    qr_code_base64 = ""
+    link_base64 = extrair_link(qr_code_info, "QRCODE.BASE64")
+    if link_base64:
+        qr_code_base64 = chamar_api_pagbank("GET", link_base64, accept="text/plain")
+    if not dados.get("id") or not qr_code:
+        raise RuntimeError("PagBank nao retornou os dados completos do Pix.")
+
+    agora = agora_texto()
+    db = get_db()
+    db.execute(
+        """
+        INSERT INTO pix_payments (
+            sale_id,
+            mercado_pago_payment_id,
+            pagbank_order_id,
+            pagbank_charge_id,
+            pagbank_qr_code_id,
+            external_reference,
+            status,
+            status_detail,
+            qr_code,
+            qr_code_base64,
+            ticket_url,
+            raw_response,
+            created_at,
+            updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(sale_id) DO UPDATE SET
+            mercado_pago_payment_id = excluded.mercado_pago_payment_id,
+            pagbank_order_id = excluded.pagbank_order_id,
+            pagbank_charge_id = excluded.pagbank_charge_id,
+            pagbank_qr_code_id = excluded.pagbank_qr_code_id,
+            external_reference = excluded.external_reference,
+            status = excluded.status,
+            status_detail = excluded.status_detail,
+            qr_code = excluded.qr_code,
+            qr_code_base64 = excluded.qr_code_base64,
+            ticket_url = excluded.ticket_url,
+            raw_response = excluded.raw_response,
+            updated_at = excluded.updated_at
+        """,
+        (
+            pedido["id"],
+            str(charge.get("id") or dados["id"]),
+            str(dados["id"]),
+            str(charge.get("id") or ""),
+            str(qr_code_info.get("id") or ""),
+            str(dados.get("reference_id") or pedido["id"]),
+            str(charge.get("status") or "WAITING").upper(),
+            str(charge.get("status") or "WAITING"),
+            qr_code,
+            qr_code_base64,
+            extrair_link(qr_code_info, "QRCODE.PNG"),
+            json.dumps(dados, ensure_ascii=True),
+            agora,
+            agora,
+        ),
+    )
+    db.execute(
+        "UPDATE sales SET status = ?, updated_at = ? WHERE id = ?",
+        ("pendente", agora, pedido["id"]),
+    )
+    db.commit()
+    return dados
+
+
+def atualizar_status_pagamento_pagbank(pedido_pagbank):
+    db = get_db()
+    order_id = str(pedido_pagbank.get("id") or "").strip()
+    external_reference = str(pedido_pagbank.get("reference_id") or "").strip()
+    if not external_reference:
+        return None
+
+    sale_id = int(external_reference)
+    pedido = buscar_pedido_por_id(sale_id)
+    if not pedido:
+        return None
+
+    qr_code_info = primeiro_qr_code(pedido_pagbank)
+    charge = (pedido_pagbank.get("charges") or [{}])[0]
+    charge_id = str(charge.get("id") or "").strip()
+    status_pagbank = str(charge.get("status") or "WAITING").upper()
+    status_pedido = status_pagbank_para_pedido(status_pagbank)
+    agora = agora_texto()
+
+    db.execute(
+        """
+        INSERT INTO pix_payments (
+            sale_id,
+            mercado_pago_payment_id,
+            pagbank_order_id,
+            pagbank_charge_id,
+            pagbank_qr_code_id,
+            external_reference,
+            status,
+            status_detail,
+            qr_code,
+            qr_code_base64,
+            ticket_url,
+            raw_response,
+            created_at,
+            updated_at,
+            approved_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(sale_id) DO UPDATE SET
+            mercado_pago_payment_id = excluded.mercado_pago_payment_id,
+            pagbank_order_id = excluded.pagbank_order_id,
+            pagbank_charge_id = excluded.pagbank_charge_id,
+            pagbank_qr_code_id = excluded.pagbank_qr_code_id,
+            external_reference = excluded.external_reference,
+            status = excluded.status,
+            status_detail = excluded.status_detail,
+            qr_code = CASE WHEN excluded.qr_code != '' THEN excluded.qr_code ELSE pix_payments.qr_code END,
+            qr_code_base64 = CASE
+                WHEN excluded.qr_code_base64 != '' THEN excluded.qr_code_base64
+                ELSE pix_payments.qr_code_base64
+            END,
+            ticket_url = CASE WHEN excluded.ticket_url != '' THEN excluded.ticket_url ELSE pix_payments.ticket_url END,
+            raw_response = excluded.raw_response,
+            updated_at = excluded.updated_at,
+            approved_at = CASE
+                WHEN excluded.approved_at IS NOT NULL THEN excluded.approved_at
+                ELSE pix_payments.approved_at
+            END
+        """,
+        (
+            sale_id,
+            charge_id or order_id,
+            order_id,
+            charge_id,
+            str(qr_code_info.get("id") or ""),
+            external_reference,
+            status_pagbank,
+            str(charge.get("status") or status_pagbank),
+            str(qr_code_info.get("text") or ""),
+            "",
+            extrair_link(qr_code_info, "QRCODE.PNG"),
+            json.dumps(pedido_pagbank, ensure_ascii=True),
+            agora,
+            agora,
+            parse_pagbank_datetime(charge.get("paid_at")) or (agora if status_pagbank == "PAID" else None),
+        ),
+    )
+    db.execute(
+        "UPDATE sales SET status = ?, updated_at = ?, paid_at = CASE WHEN ? = 'pago' THEN ? ELSE paid_at END WHERE id = ?",
+        (status_pedido, agora, status_pedido, agora, sale_id),
+    )
+
+    pagamento_local = buscar_pagamento_pix_por_pedido(sale_id)
+    if (
+        status_pedido == "pago"
+        and pedido["client_email"]
+        and pagamento_local
+        and not int(pagamento_local["notification_email_sent"])
+    ):
+        try:
+            enviado, _mensagem = enviar_email_pagamento_aprovado(
+                pedido["client_email"], sale_id, float(pedido["total"])
+            )
+        except Exception:
+            enviado = False
+        if enviado:
+            db.execute(
+                "UPDATE pix_payments SET notification_email_sent = 1, updated_at = ? WHERE sale_id = ?",
+                (agora_texto(), sale_id),
+            )
+
+    db.commit()
+    return buscar_pedido_por_id(sale_id)
+
+
+def consultar_pedido_pagbank(order_id):
+    if not order_id:
+        raise RuntimeError("Pedido PagBank nao informado.")
+    return chamar_api_pagbank("GET", f"/orders/{order_id}")
 
 
 @app.route("/health")
@@ -628,12 +1177,103 @@ def ver_carrinho():
     )
 
 
+@app.post("/criar_pix")
+def criar_pix():
+    dados = request.get_json(silent=True) or request.form
+    pedido_id = str(dados.get("pedido_id", "")).strip()
+    valor_informado = dados.get("valor")
+    client_id = session.get("client_id")
+
+    try:
+        if pedido_id:
+            pedido = buscar_pedido_por_id(int(pedido_id), client_id=client_id if client_id else None)
+            if not pedido:
+                return jsonify({"erro": "Pedido nao encontrado."}), 404
+            if valor_informado is not None and round(parse_float(valor_informado), 2) != round(float(pedido["total"]), 2):
+                return jsonify({"erro": "O valor informado difere do total do pedido."}), 400
+        else:
+            novo_pedido_id = garantir_pedido_simples(
+                valor_informado,
+                client_id=client_id,
+                client_name=session.get("client_name"),
+            )
+            pedido = buscar_pedido_por_id(novo_pedido_id, client_id=client_id if client_id else None)
+    except ValueError as erro:
+        return jsonify({"erro": str(erro)}), 400
+
+    pagamento_existente = buscar_pagamento_pix_por_pedido(int(pedido["id"]))
+    if pagamento_existente and str(pagamento_existente["status"]).upper() == "PAID":
+        return jsonify(
+            {
+                "pedido_id": int(pedido["id"]),
+                "payment_id": pagamento_existente["pagbank_charge_id"] or pagamento_existente["pagbank_order_id"],
+                "status": "PAID",
+                "mensagem": "Pagamento ja aprovado.",
+            }
+        )
+
+    if pagamento_existente and pagamento_existente["qr_code"] and str(pagamento_existente["status"]).upper() in {
+        "WAITING",
+        "AUTHORIZED",
+    }:
+        return jsonify(
+            {
+                "pedido_id": int(pedido["id"]),
+                "payment_id": pagamento_existente["pagbank_charge_id"] or pagamento_existente["pagbank_order_id"],
+                "status": pagamento_existente["status"],
+                "qr_code": pagamento_existente["qr_code"],
+                "qr_code_base64": pagamento_existente["qr_code_base64"],
+                "mensagem": "Pagamento Pix ja gerado para este pedido.",
+            }
+        )
+
+    try:
+        pedido_pagbank = criar_pagamento_pix_pagbank(pedido)
+    except RuntimeError as erro:
+        return jsonify({"erro": str(erro)}), 500
+    except Exception as erro:  # pragma: no cover - depende da API externa
+        return jsonify({"erro": f"Falha ao gerar Pix no PagBank: {erro}"}), 502
+
+    qr_code_info = primeiro_qr_code(pedido_pagbank)
+    charge = (pedido_pagbank.get("charges") or [{}])[0]
+    return jsonify(
+        {
+            "pedido_id": int(pedido["id"]),
+            "payment_id": charge.get("id") or pedido_pagbank.get("id"),
+            "status": charge.get("status") or "WAITING",
+            "qr_code": qr_code_info.get("text"),
+            "qr_code_base64": buscar_pagamento_pix_por_pedido(int(pedido["id"]))["qr_code_base64"],
+            "ticket_url": extrair_link(qr_code_info, "QRCODE.PNG"),
+        }
+    )
+
+
+@app.post("/webhook")
+def webhook_pagbank():
+    if not validar_assinatura_webhook():
+        return {"status": "assinatura_invalida"}, 401
+
+    corpo = request.get_json(silent=True) or {}
+    order_id = str(corpo.get("id") or "").strip()
+    if not order_id:
+        return {"status": "ignorado"}, 200
+
+    try:
+        pedido_pagbank = consultar_pedido_pagbank(order_id)
+        atualizar_status_pagamento_pagbank(pedido_pagbank)
+    except RuntimeError as erro:
+        return {"status": "erro_configuracao", "detalhe": str(erro)}, 500
+    except Exception as erro:  # pragma: no cover - depende da API externa
+        return {"status": "erro_consulta", "detalhe": str(erro)}, 500
+    return {"status": "ok"}, 200
+
+
 @app.get("/pedido/<int:sale_id>")
 @client_required
 def pedido_confirmado(sale_id):
     db = get_db()
     pedido = db.execute(
-        "SELECT id, total, status, created_at FROM sales WHERE id = ? AND client_id = ?",
+        "SELECT id, total, status, created_at, updated_at, paid_at FROM sales WHERE id = ? AND client_id = ?",
         (sale_id, session["client_id"]),
     ).fetchone()
     if not pedido:
@@ -648,7 +1288,36 @@ def pedido_confirmado(sale_id):
         """,
         (sale_id,),
     ).fetchall()
-    return render_template("pedido_confirmado.html", pedido=pedido, itens=itens, pix_key=CONFIG["pix_key"])
+    pagamento_pix = buscar_pagamento_pix_por_pedido(sale_id)
+    return render_template(
+        "pedido_confirmado.html",
+        pedido=pedido,
+        itens=itens,
+        pix_key=CONFIG["pix_key"],
+        pagamento_pix=pagamento_pix,
+        pagbank_configurado=pagbank_configurado(),
+    )
+
+
+@app.get("/pedido/<int:sale_id>/status")
+@client_required
+def status_pedido(sale_id):
+    pedido = buscar_pedido_por_id(sale_id, client_id=session["client_id"])
+    if not pedido:
+        return jsonify({"erro": "Pedido nao encontrado."}), 404
+    pagamento_pix = buscar_pagamento_pix_por_pedido(sale_id)
+    return jsonify(
+        {
+            "pedido_id": int(pedido["id"]),
+            "status": pedido["status"],
+            "total": float(pedido["total"]),
+            "payment_status": pagamento_pix["status"] if pagamento_pix else None,
+            "payment_id": (
+                (pagamento_pix["pagbank_charge_id"] or pagamento_pix["pagbank_order_id"]) if pagamento_pix else None
+            ),
+            "paid_at": pedido["paid_at"],
+        }
+    )
 
 
 @app.post("/carrinho/remover/<int:product_id>")
@@ -678,12 +1347,15 @@ def checkout():
         produtos.append(produto)
         total += float(produto["price"]) * item["quantity"]
 
-    agora = datetime.now().strftime("%d/%m/%Y %H:%M")
+    agora = agora_texto()
     try:
         db.execute("BEGIN")
         cursor = db.execute(
-            "INSERT INTO sales (client_id, client_name, total, status, created_at) VALUES (?, ?, ?, ?, ?)",
-            (session["client_id"], session["client_name"], total, "Aguardando PIX", agora),
+            """
+            INSERT INTO sales (client_id, client_name, total, status, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (session["client_id"], session["client_name"], total, "pendente", agora, agora),
         )
         sale_id = cursor.lastrowid
         for item, produto in zip(cart, produtos):

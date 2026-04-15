@@ -16,5 +16,13 @@ services:
         sync: false
       - key: ORQ_WEB_SECRET_KEY
         generateValue: true
+      - key: PAGBANK_TOKEN
+        sync: false
+      - key: PAGBANK_WEBHOOK_TOKEN
+        sync: false
+      - key: PAGBANK_NOTIFICATION_URL
+        sync: false
+      - key: PAGBANK_API_BASE
+        value: https://sandbox.api.pagseguro.com
       - key: WEB_APP_DATA_DIR
         value: /var/data
