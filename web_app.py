@@ -95,6 +95,33 @@ def parse_bool(valor):
     return str(valor or "").strip().lower() in {"1", "true", "yes", "sim", "on"}
 
 
+def valor_configuracao_ativa(valor):
+    texto = str(valor or "").strip()
+    if not texto:
+        return ""
+
+    texto_normalizado = texto.lower()
+    marcadores_exemplo = (
+        "seu-",
+        "sua-",
+        "example",
+        "exemplo",
+        "troque-esta-senha",
+        "smtp.seuprovedor.com",
+        "usuario",
+        "senha",
+    )
+    dominios_exemplo = (
+        "orquideas.local",
+        "seu-endereco-publico",
+    )
+    if any(marcador in texto_normalizado for marcador in marcadores_exemplo):
+        return ""
+    if any(dominio in texto_normalizado for dominio in dominios_exemplo):
+        return ""
+    return texto
+
+
 def parse_float(valor, padrao=0.0):
     try:
         return float(str(valor).replace(",", "."))
@@ -107,13 +134,14 @@ def normalizar_email(email):
 
 
 def url_publica_base():
-    if CONFIG["loja_base_url"]:
-        return CONFIG["loja_base_url"]
+    base_url = valor_configuracao_ativa(CONFIG["loja_base_url"])
+    if base_url:
+        return base_url
     return request.host_url.rstrip("/")
 
 
 def pagbank_configurado():
-    return bool(CONFIG["pagbank_token"])
+    return bool(valor_configuracao_ativa(CONFIG["pagbank_token"]))
 
 
 def obter_pagbank_api_base():
@@ -121,7 +149,7 @@ def obter_pagbank_api_base():
 
 
 def validar_assinatura_webhook():
-    token = CONFIG["pagbank_webhook_token"]
+    token = valor_configuracao_ativa(CONFIG["pagbank_webhook_token"])
     if not token:
         return True
 
@@ -136,18 +164,14 @@ def validar_assinatura_webhook():
 
 
 def pagbank_headers(media_type="application/json"):
-    token = CONFIG["pagbank_token"]
+    token = valor_configuracao_ativa(CONFIG["pagbank_token"])
     if not token:
         raise RuntimeError("Token do PagBank nao configurado.")
     return {
         "Authorization": f"Bearer {token}",
         "Accept": media_type,
         "Content-Type": "application/json",
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/135.0.0.0 Safari/537.36 CasaDasOrquideas/1.0"
-        ),
+        "User-Agent": "CasaDasOrquideas-PagBank/1.0",
     }
 
 
@@ -248,12 +272,15 @@ def enviar_email_pagamento_aprovado(destinatario, pedido_id, total):
     destinatario = normalizar_email(destinatario)
     if not destinatario:
         return False, "Cliente sem email cadastrado."
-    if not CONFIG["smtp_host"] or not CONFIG["smtp_sender"]:
+    smtp_host = valor_configuracao_ativa(CONFIG["smtp_host"])
+    smtp_sender = valor_configuracao_ativa(CONFIG["smtp_sender"])
+    smtp_user = valor_configuracao_ativa(CONFIG["smtp_user"])
+    if not smtp_host or not smtp_sender:
         return False, "SMTP nao configurado."
 
     mensagem = EmailMessage()
     mensagem["Subject"] = f"Pagamento aprovado do pedido #{pedido_id}"
-    mensagem["From"] = CONFIG["smtp_sender"]
+    mensagem["From"] = smtp_sender
     mensagem["To"] = destinatario
     mensagem.set_content(
         "\n".join(
@@ -273,13 +300,13 @@ def enviar_email_pagamento_aprovado(destinatario, pedido_id, total):
     porta = int(CONFIG["smtp_port"] or "587")
     usar_tls = parse_bool(CONFIG["smtp_use_tls"])
     contexto_ssl = ssl.create_default_context()
-    with smtplib.SMTP(CONFIG["smtp_host"], porta, timeout=20) as servidor:
+    with smtplib.SMTP(smtp_host, porta, timeout=20) as servidor:
         servidor.ehlo()
         if usar_tls:
             servidor.starttls(context=contexto_ssl)
             servidor.ehlo()
-        if CONFIG["smtp_user"]:
-            servidor.login(CONFIG["smtp_user"], CONFIG["smtp_password"])
+        if smtp_user:
+            servidor.login(smtp_user, CONFIG["smtp_password"])
         servidor.send_message(mensagem)
     return True, "Email enviado."
 
@@ -696,7 +723,9 @@ def payload_pix_pagbank(pedido):
     if len(tax_id) not in {11, 14}:
         raise RuntimeError("O cliente precisa ter CPF ou CNPJ cadastrado para gerar Pix no PagBank.")
 
-    notification_url = CONFIG["pagbank_notification_url"] or f"{url_publica_base()}{url_for('webhook_pagbank')}"
+    notification_url = valor_configuracao_ativa(CONFIG["pagbank_notification_url"]) or (
+        f"{url_publica_base()}{url_for('webhook_pagbank')}"
+    )
     email_pagador = normalizar_email(pedido["client_email"]) or CONFIG["admin_email"]
     payload = {
         "reference_id": str(pedido["id"]),
@@ -717,7 +746,8 @@ def payload_pix_pagbank(pedido):
             {
                 "amount": {
                     "value": int(round(float(pedido["total"]) * 100)),
-                }
+                },
+                "arrangements": ["PAGBANK"],
             }
         ],
         "notification_urls": [notification_url],
@@ -1306,6 +1336,20 @@ def status_pedido(sale_id):
     if not pedido:
         return jsonify({"erro": "Pedido nao encontrado."}), 404
     pagamento_pix = buscar_pagamento_pix_por_pedido(sale_id)
+    if (
+        pagamento_pix
+        and pagbank_configurado()
+        and str(pagamento_pix["status"] or "").upper() in {"WAITING", "AUTHORIZED"}
+        and pagamento_pix["pagbank_order_id"]
+    ):
+        try:
+            pedido_pagbank = consultar_pedido_pagbank(pagamento_pix["pagbank_order_id"])
+            pedido = atualizar_status_pagamento_pagbank(pedido_pagbank) or pedido
+            pagamento_pix = buscar_pagamento_pix_por_pedido(sale_id)
+        except RuntimeError:
+            pass
+        except Exception:
+            pass
     return jsonify(
         {
             "pedido_id": int(pedido["id"]),
