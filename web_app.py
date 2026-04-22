@@ -747,7 +747,6 @@ def payload_pix_pagbank(pedido):
                 "amount": {
                     "value": int(round(float(pedido["total"]) * 100)),
                 },
-                "arrangements": ["PAGBANK"],
             }
         ],
         "notification_urls": [notification_url],
