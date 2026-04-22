@@ -15,7 +15,7 @@ import ssl
 from urllib import error as urllib_error
 from urllib import request as urllib_request
 
-from flask import Flask, flash, g, jsonify, redirect, render_template, request, send_from_directory, session, url_for
+from flask import Flask, Response, flash, g, jsonify, redirect, render_template, request, send_from_directory, session, url_for
 from openpyxl import load_workbook
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -212,6 +212,21 @@ def chamar_api_pagbank(metodo, caminho_ou_url, payload=None, accept="application
     return conteudo.strip()
 
 
+def chamar_api_pagbank_binario(caminho_ou_url, accept="application/octet-stream"):
+    url = caminho_ou_url if str(caminho_ou_url).startswith("http") else f"{obter_pagbank_api_base()}{caminho_ou_url}"
+    headers = pagbank_headers(accept)
+    headers.pop("Content-Type", None)
+    requisicao = urllib_request.Request(url, method="GET", headers=headers)
+    try:
+        with urllib_request.urlopen(requisicao, timeout=30) as resposta:
+            return resposta.read(), resposta.headers.get_content_type()
+    except urllib_error.HTTPError as erro:
+        conteudo = erro.read().decode("utf-8", errors="replace")
+        raise RuntimeError(extrair_erro_pagbank(conteudo, f"PagBank retornou HTTP {erro.code}.")) from erro
+    except urllib_error.URLError as erro:
+        raise RuntimeError(f"Falha de conexao com o PagBank: {erro.reason}") from erro
+
+
 def extrair_link(qr_code, rel):
     for item in qr_code.get("links", []):
         if str(item.get("rel") or "").upper() == rel.upper():
@@ -222,6 +237,11 @@ def extrair_link(qr_code, rel):
 def primeiro_qr_code(dados):
     qr_codes = dados.get("qr_codes") or dados.get("qr_code") or []
     return qr_codes[0] if qr_codes else {}
+
+
+def primeira_cobranca(dados):
+    charges = dados.get("charges") or []
+    return charges[0] if charges else {}
 
 
 def parse_pagbank_datetime(valor):
@@ -238,6 +258,12 @@ def parse_pagbank_datetime(valor):
 
 def status_pagbank_para_pedido(status_pagbank):
     return "pago" if str(status_pagbank or "").upper() == "PAID" else "pendente"
+
+
+def status_pagbank_do_pedido(pedido_pagbank):
+    charge = primeira_cobranca(pedido_pagbank)
+    status = str(charge.get("status") or pedido_pagbank.get("status") or "").upper()
+    return status or "WAITING"
 
 
 def telefone_pagbank(telefone):
@@ -760,7 +786,7 @@ def payload_pix_pagbank(pedido):
 def criar_pagamento_pix_pagbank(pedido):
     dados = chamar_api_pagbank("POST", "/orders", payload=payload_pix_pagbank(pedido))
     qr_code_info = primeiro_qr_code(dados)
-    charge = (dados.get("charges") or [{}])[0]
+    charge = primeira_cobranca(dados)
     qr_code = str(qr_code_info.get("text") or "").strip()
     qr_code_base64 = ""
     link_base64 = extrair_link(qr_code_info, "QRCODE.BASE64")
@@ -842,9 +868,9 @@ def atualizar_status_pagamento_pagbank(pedido_pagbank):
         return None
 
     qr_code_info = primeiro_qr_code(pedido_pagbank)
-    charge = (pedido_pagbank.get("charges") or [{}])[0]
+    charge = primeira_cobranca(pedido_pagbank)
     charge_id = str(charge.get("id") or "").strip()
-    status_pagbank = str(charge.get("status") or "WAITING").upper()
+    status_pagbank = status_pagbank_do_pedido(pedido_pagbank)
     status_pedido = status_pagbank_para_pedido(status_pagbank)
     agora = agora_texto()
 
@@ -1252,6 +1278,7 @@ def criar_pix():
                 "status": pagamento_existente["status"],
                 "qr_code": pagamento_existente["qr_code"],
                 "qr_code_base64": pagamento_existente["qr_code_base64"],
+                "ticket_url": pagamento_existente["ticket_url"],
                 "mensagem": "Pagamento Pix ja gerado para este pedido.",
             }
         )
@@ -1264,12 +1291,12 @@ def criar_pix():
         return jsonify({"erro": f"Falha ao gerar Pix no PagBank: {erro}"}), 502
 
     qr_code_info = primeiro_qr_code(pedido_pagbank)
-    charge = (pedido_pagbank.get("charges") or [{}])[0]
+    charge = primeira_cobranca(pedido_pagbank)
     return jsonify(
         {
             "pedido_id": int(pedido["id"]),
             "payment_id": charge.get("id") or pedido_pagbank.get("id"),
-            "status": charge.get("status") or "WAITING",
+            "status": status_pagbank_do_pedido(pedido_pagbank),
             "qr_code": qr_code_info.get("text"),
             "qr_code_base64": buscar_pagamento_pix_por_pedido(int(pedido["id"]))["qr_code_base64"],
             "ticket_url": extrair_link(qr_code_info, "QRCODE.PNG"),
@@ -1328,6 +1355,35 @@ def pedido_confirmado(sale_id):
     )
 
 
+@app.get("/pedido/<int:sale_id>/qr.png")
+@client_required
+def qr_code_pedido(sale_id):
+    pagamento_pix = buscar_pagamento_pix_por_pedido(sale_id)
+    if not pagamento_pix:
+        return "", 404
+
+    if pagamento_pix["qr_code_base64"]:
+        try:
+            import base64
+
+            imagem = base64.b64decode(str(pagamento_pix["qr_code_base64"]))
+            return Response(imagem, mimetype="image/png")
+        except Exception:
+            pass
+
+    ticket_url = str(pagamento_pix["ticket_url"] or "").strip()
+    if not ticket_url:
+        return "", 404
+
+    try:
+        conteudo, mime_type = chamar_api_pagbank_binario(ticket_url, accept="image/png")
+    except RuntimeError:
+        return "", 502
+    except Exception:
+        return "", 502
+    return Response(conteudo, mimetype=mime_type or "image/png")
+
+
 @app.get("/pedido/<int:sale_id>/status")
 @client_required
 def status_pedido(sale_id):
@@ -1358,6 +1414,10 @@ def status_pedido(sale_id):
             "payment_id": (
                 (pagamento_pix["pagbank_charge_id"] or pagamento_pix["pagbank_order_id"]) if pagamento_pix else None
             ),
+            "qr_code": pagamento_pix["qr_code"] if pagamento_pix else None,
+            "qr_code_base64": pagamento_pix["qr_code_base64"] if pagamento_pix else None,
+            "ticket_url": pagamento_pix["ticket_url"] if pagamento_pix else None,
+            "qr_image_url": url_for("qr_code_pedido", sale_id=sale_id) if pagamento_pix else None,
             "paid_at": pedido["paid_at"],
         }
     )

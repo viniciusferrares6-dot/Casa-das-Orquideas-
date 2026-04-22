@@ -68,7 +68,7 @@
                 alt="QR Code Pix"
                 class="pix-qr"
                 id="pix-qr-image"
-                src="{% if pagamento_pix and pagamento_pix.qr_code_base64 %}data:image/png;base64,{{ pagamento_pix.qr_code_base64 }}{% elif pagamento_pix and pagamento_pix.ticket_url %}{{ pagamento_pix.ticket_url }}{% endif %}"
+                src="{% if pagamento_pix %}{{ url_for('qr_code_pedido', sale_id=pedido.id) }}{% endif %}"
             >
             <label class="pix-label" for="pix-copia-cola">Codigo Pix copia e cola</label>
             <textarea class="pix-copy-field" id="pix-copia-cola" readonly>{% if pagamento_pix %}{{ pagamento_pix.qr_code }}{% endif %}</textarea>
@@ -97,7 +97,18 @@
         const qrImage = document.getElementById("pix-qr-image");
         const copiaCola = document.getElementById("pix-copia-cola");
         const statusTexto = document.getElementById("pedido-status-texto");
+        const qrImageBaseUrl = "{{ url_for('qr_code_pedido', sale_id=pedido.id) }}";
         let pollingAtivo = false;
+
+        function atualizarQrImagem(dados) {
+            if (dados.qr_code_base64) {
+                qrImage.src = `data:image/png;base64,${dados.qr_code_base64}`;
+                return;
+            }
+            if (dados.qr_image_url || dados.ticket_url || copiaCola.value) {
+                qrImage.src = `${qrImageBaseUrl}?v=${Date.now()}`;
+            }
+        }
 
         function atualizarMensagem(texto, classe = "") {
             feedback.textContent = texto;
@@ -106,6 +117,11 @@
 
         function aplicarStatus(dados) {
             const status = String(dados.status || "").toLowerCase();
+            atualizarQrImagem(dados);
+            if (dados.qr_code) {
+                copiaCola.value = dados.qr_code;
+                pixBox.classList.remove("hidden");
+            }
             statusTexto.textContent = status === "pago" ? "Pago" : "Pendente";
             if (status === "pago") {
                 atualizarMensagem("Pagamento aprovado.", "success");
@@ -168,11 +184,7 @@
                 if (!resposta.ok) {
                     throw new Error(dados.erro || "Nao foi possivel gerar o Pix.");
                 }
-                if (dados.qr_code_base64) {
-                    qrImage.src = `data:image/png;base64,${dados.qr_code_base64}`;
-                } else if (dados.ticket_url) {
-                    qrImage.src = dados.ticket_url;
-                }
+                atualizarQrImagem(dados);
                 copiaCola.value = dados.qr_code || "";
                 pixBox.classList.remove("hidden");
                 gerarBtn.textContent = "Pix gerado";
