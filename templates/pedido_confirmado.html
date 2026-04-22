@@ -68,7 +68,7 @@
                 alt="QR Code Pix"
                 class="pix-qr"
                 id="pix-qr-image"
-                src="{% if pagamento_pix and pagamento_pix.qr_code_base64 %}data:image/png;base64,{{ pagamento_pix.qr_code_base64 }}{% endif %}"
+                src="{% if pagamento_pix and pagamento_pix.qr_code_base64 %}data:image/png;base64,{{ pagamento_pix.qr_code_base64 }}{% elif pagamento_pix and pagamento_pix.ticket_url %}{{ pagamento_pix.ticket_url }}{% endif %}"
             >
             <label class="pix-label" for="pix-copia-cola">Codigo Pix copia e cola</label>
             <textarea class="pix-copy-field" id="pix-copia-cola" readonly>{% if pagamento_pix %}{{ pagamento_pix.qr_code }}{% endif %}</textarea>
@@ -170,6 +170,8 @@
                 }
                 if (dados.qr_code_base64) {
                     qrImage.src = `data:image/png;base64,${dados.qr_code_base64}`;
+                } else if (dados.ticket_url) {
+                    qrImage.src = dados.ticket_url;
                 }
                 copiaCola.value = dados.qr_code || "";
                 pixBox.classList.remove("hidden");
