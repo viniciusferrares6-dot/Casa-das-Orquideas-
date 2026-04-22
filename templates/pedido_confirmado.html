@@ -100,12 +100,21 @@
         const qrImageBaseUrl = "{{ url_for('qr_code_pedido', sale_id=pedido.id) }}";
         let pollingAtivo = false;
 
+        function temDadosPix(dados) {
+            return Boolean(
+                dados.qr_code ||
+                dados.qr_code_base64 ||
+                dados.qr_image_url ||
+                dados.ticket_url
+            );
+        }
+
         function atualizarQrImagem(dados) {
             if (dados.qr_code_base64) {
                 qrImage.src = `data:image/png;base64,${dados.qr_code_base64}`;
                 return;
             }
-            if (dados.qr_image_url || dados.ticket_url || copiaCola.value) {
+            if (dados.qr_image_url || dados.ticket_url) {
                 qrImage.src = `${qrImageBaseUrl}?v=${Date.now()}`;
             }
         }
@@ -120,6 +129,8 @@
             atualizarQrImagem(dados);
             if (dados.qr_code) {
                 copiaCola.value = dados.qr_code;
+            }
+            if (temDadosPix(dados) || copiaCola.value || qrImage.getAttribute("src")) {
                 pixBox.classList.remove("hidden");
             }
             statusTexto.textContent = status === "pago" ? "Pago" : "Pendente";
@@ -188,7 +199,10 @@
                 copiaCola.value = dados.qr_code || "";
                 pixBox.classList.remove("hidden");
                 gerarBtn.textContent = "Pix gerado";
-                aplicarStatus({ status: String(dados.status || "").toUpperCase() === "PAID" ? "pago" : "pendente" });
+                aplicarStatus({
+                    ...dados,
+                    status: String(dados.status || "").toUpperCase() === "PAID" ? "pago" : "pendente"
+                });
             } catch (erro) {
                 gerarBtn.disabled = false;
                 gerarBtn.textContent = "Pagar com Pix";
